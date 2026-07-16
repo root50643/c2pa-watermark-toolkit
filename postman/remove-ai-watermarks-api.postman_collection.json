@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7d52f83a-df0c-4aa9-b604-8a1c6aee0c31",
     "name": "C2PA Watermark Toolkit API",
-    "description": "Set base_url and api_key. Accepted images and access metadata are retained permanently.",
+    "description": "Set base_url and api_key. If the server uses REQUIRE_API_KEY=false, api_key may be empty. A supplied key is always validated.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -23,6 +23,7 @@
       "name": "System",
       "item": [
         {"name": "Health", "request": {"auth": {"type": "noauth"}, "method": "GET", "url": "{{base_url}}/healthz"}},
+        {"name": "Readiness", "request": {"auth": {"type": "noauth"}, "method": "GET", "url": "{{base_url}}/readyz"}},
         {"name": "Capabilities", "request": {"auth": {"type": "noauth"}, "method": "GET", "url": "{{base_url}}/api/v1/capabilities"}},
         {"name": "Current customer", "request": {"method": "GET", "url": "{{base_url}}/api/v1/me"}}
       ]
@@ -34,7 +35,9 @@
           "name": "Identify",
           "request": {
             "method": "POST",
-            "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": ""}]},
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": "", "description": "Required PNG, JPEG, WebP, HEIC, HEIF, or AVIF image. Configured limits are reported by /api/v1/capabilities."}
+            ]},
             "url": "{{base_url}}/api/v1/identify"
           }
         },
@@ -43,10 +46,10 @@
           "request": {
             "method": "POST",
             "body": {"mode": "formdata", "formdata": [
-              {"key": "file", "type": "file", "src": ""},
-              {"key": "sensitivity", "value": "auto", "type": "text"},
-              {"key": "backend", "value": "cv2", "type": "text"},
-              {"key": "strip_metadata", "value": "true", "type": "text"}
+              {"key": "file", "type": "file", "src": "", "description": "Required PNG, JPEG, WebP, HEIC, HEIF, or AVIF image."},
+              {"key": "sensitivity", "value": "auto", "type": "text", "description": "auto relaxes detection only with corroboration; strict minimizes false positives; assume_ai increases recall with more false-positive risk."},
+              {"key": "backend", "value": "cv2", "type": "text", "description": "cv2 is fast classical inpainting; migan and lama are more resource-intensive neural backends."},
+              {"key": "strip_metadata", "value": "true", "type": "text", "description": "Remove recognized AI/C2PA provenance from the result. This is not a full purge of ordinary metadata."}
             ]},
             "url": "{{base_url}}/api/v1/remove/visible"
           }
@@ -56,9 +59,12 @@
           "request": {
             "method": "POST",
             "body": {"mode": "formdata", "formdata": [
-              {"key": "file", "type": "file", "src": ""},
-              {"key": "regions", "value": "[[10,20,100,50]]", "type": "text"},
-              {"key": "backend", "value": "cv2", "type": "text"}
+              {"key": "file", "type": "file", "src": "", "description": "Required supported image. Region coordinates use its original pixel dimensions."},
+              {"key": "regions", "value": "[[10,20,100,50]]", "type": "text", "description": "JSON string with 1-20 [x,y,width,height] boxes inside the image; x/y is the top-left corner."},
+              {"key": "backend", "value": "cv2", "type": "text", "description": "cv2, migan, or lama inpainting backend."},
+              {"key": "method", "value": "telea", "type": "text", "description": "telea or ns OpenCV algorithm; used only when backend=cv2."},
+              {"key": "dilate", "value": "3", "type": "text", "description": "Expand each mask outward by 0-100 pixels before inpainting."},
+              {"key": "strip_metadata", "value": "true", "type": "text", "description": "Remove recognized AI/C2PA provenance from the result."}
             ]},
             "url": "{{base_url}}/api/v1/remove/erase"
           }
@@ -68,8 +74,8 @@
           "request": {
             "method": "POST",
             "body": {"mode": "formdata", "formdata": [
-              {"key": "file", "type": "file", "src": ""},
-              {"key": "keep_standard", "value": "true", "type": "text"}
+              {"key": "file", "type": "file", "src": "", "description": "Required supported image."},
+              {"key": "keep_standard", "value": "true", "type": "text", "description": "true retains ordinary non-AI fields while removing AI/C2PA information; false drops allowlisted text fields more aggressively. Format-specific processing means false is not a guarantee that every metadata item is blank."}
             ]},
             "url": "{{base_url}}/api/v1/remove/metadata"
           }
@@ -84,11 +90,44 @@
           "request": {
             "method": "POST",
             "body": {"mode": "formdata", "formdata": [
-              {"key": "file", "type": "file", "src": ""},
-              {"key": "pipeline", "value": "controlnet", "type": "text"},
-              {"key": "force", "value": "false", "type": "text"}
+              {"key": "file", "type": "file", "src": "", "description": "Required PNG, JPEG, WebP, HEIC, HEIF, or AVIF image."},
+              {"key": "pipeline", "value": "controlnet", "type": "text", "description": "controlnet preserves edges and structure; sdxl is lighter; qwen prioritizes text/structure but needs cloud-class CUDA."},
+              {"key": "strength", "value": "", "type": "text", "disabled": true, "description": "Optional 0-1 diffusion strength. Leave disabled/omitted for the vendor-adaptive default."},
+              {"key": "steps", "value": "50", "type": "text", "description": "1-200 denoising steps. More steps take longer and do not guarantee a better result."},
+              {"key": "seed", "value": "", "type": "text", "disabled": true, "description": "Optional integer seed for reproducibility under a fixed model and environment."},
+              {"key": "force", "value": "false", "type": "text", "description": "Run even when no local invisible signal is detected; may alter a clean image."},
+              {"key": "strip_metadata", "value": "true", "type": "text", "description": "Remove recognized AI/C2PA provenance from the generated result."},
+              {"key": "max_resolution", "value": "0", "type": "text", "description": "0-8192 long-side cap before diffusion; 0 disables the cap."},
+              {"key": "min_resolution", "value": "1024", "type": "text", "description": "0-4096 long-side floor before diffusion; 0 disables upscaling."},
+              {"key": "tile", "value": "false", "type": "text", "description": "Use overlapping tiles only when the long side exceeds tile_size."},
+              {"key": "tile_size", "value": "1024", "type": "text", "description": "512-2048 square tile edge in pixels."},
+              {"key": "tile_overlap", "value": "128", "type": "text", "description": "0-512 overlap pixels for feather blending and seam reduction."}
             ]},
             "url": "{{base_url}}/api/v1/jobs/invisible"
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 202) pm.collectionVariables.set('job_id', pm.response.json().job_id);"]}}]
+        },
+        {
+          "name": "Submit complete job",
+          "request": {
+            "method": "POST",
+            "description": "Runs visible removal, optional invisible regeneration, and AI metadata cleanup. Metadata cleanup is always enabled with keep_standard=true.",
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": "", "description": "Required supported image."},
+              {"key": "pipeline", "value": "controlnet", "type": "text", "description": "controlnet, sdxl, or qwen GPU regeneration profile."},
+              {"key": "strength", "value": "", "type": "text", "disabled": true, "description": "Optional 0-1 diffusion strength; omit for the vendor-adaptive default."},
+              {"key": "steps", "value": "50", "type": "text", "description": "1-200 denoising steps."},
+              {"key": "seed", "value": "", "type": "text", "disabled": true, "description": "Optional integer seed."},
+              {"key": "force", "value": "false", "type": "text", "description": "Force GPU regeneration when no local invisible signal is detected."},
+              {"key": "sensitivity", "value": "auto", "type": "text", "description": "auto, strict, or assume_ai visible-mark detection policy."},
+              {"key": "backend", "value": "cv2", "type": "text", "description": "cv2, migan, or lama visible-mark inpainting backend."},
+              {"key": "max_resolution", "value": "0", "type": "text", "description": "0-8192 long-side cap; 0 disables it."},
+              {"key": "min_resolution", "value": "1024", "type": "text", "description": "0-4096 long-side floor; 0 disables it."},
+              {"key": "tile", "value": "false", "type": "text", "description": "Enable overlapping tiled diffusion for images larger than tile_size."},
+              {"key": "tile_size", "value": "1024", "type": "text", "description": "512-2048 square tile edge in pixels."},
+              {"key": "tile_overlap", "value": "128", "type": "text", "description": "0-512 overlap pixels for feather blending."}
+            ]},
+            "url": "{{base_url}}/api/v1/jobs/all"
           },
           "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 202) pm.collectionVariables.set('job_id', pm.response.json().job_id);"]}}]
         },

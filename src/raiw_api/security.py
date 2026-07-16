@@ -9,14 +9,18 @@ from typing import Any
 
 from raiw_api.db import Database
 
+ANONYMOUS_CUSTOMER_ID = "00000000-0000-0000-0000-000000000000"
+ANONYMOUS_CUSTOMER_NAME = "Anonymous API Client"
+ANONYMOUS_EXTERNAL_ID = "anonymous"
+
 
 @dataclass(frozen=True, slots=True)
 class Principal:
     customer_id: str
     customer_name: str
     external_id: str | None
-    key_id: str
-    key_prefix: str
+    key_id: str | None
+    key_prefix: str | None
 
 
 def _digest(key: str, pepper: str) -> str:
@@ -48,6 +52,21 @@ def authenticate_api_key(db: Database, pepper: str, key: str) -> Principal | Non
         external_id=row["external_id"],
         key_id=row["id"],
         key_prefix=row["prefix"],
+    )
+
+
+def anonymous_principal(db: Database) -> Principal:
+    customer = db.ensure_customer(
+        ANONYMOUS_CUSTOMER_ID,
+        ANONYMOUS_CUSTOMER_NAME,
+        ANONYMOUS_EXTERNAL_ID,
+    )
+    return Principal(
+        customer_id=customer["id"],
+        customer_name=customer["name"],
+        external_id=customer["external_id"],
+        key_id=None,
+        key_prefix=None,
     )
 
 

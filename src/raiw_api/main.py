@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Path as PathParameter
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
@@ -27,7 +28,7 @@ from raiw_api.schemas import (
     JobStatus,
     MeResponse,
 )
-from raiw_api.security import Principal, authenticate_api_key, client_ip
+from raiw_api.security import Principal, anonymous_principal, authenticate_api_key, client_ip
 from raiw_api.services import (
     erase_image,
     identify_image,
@@ -37,7 +38,70 @@ from raiw_api.services import (
 )
 
 logger = logging.getLogger(__name__)
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+UPLOAD_DESCRIPTION = (
+    "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，"
+    "實際限制以 /api/v1/capabilities 為準。"
+)
+SENSITIVITY_DESCRIPTION = (
+    "可見標記偵測策略：auto 只在 metadata 或同產品標記提供佐證時放寬門檻；strict 永不放寬，"
+    "誤判風險最低；assume_ai 對所有已知標記放寬門檻，適合已知為 AI 圖片但較可能誤判。"
+)
+BACKEND_DESCRIPTION = (
+    "指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，"
+    "通常適合較大或較複雜區域。"
+)
+STRIP_METADATA_DESCRIPTION = (
+    "是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。"
+    "這不是保證清空所有一般 metadata。"
+)
+KEEP_STANDARD_DESCRIPTION = (
+    "true（預設）會移除 AI/C2PA 資訊，同時盡量保留非 AI 的一般欄位，例如 Author、Title、"
+    "Description、Copyright、Comment、Software、Source 與 Creation Time；false 不保留這些白名單文字欄位，"
+    "採較積極的清理。上游會依格式採不同的無損策略，因此 false 不保證清空所有 metadata：JPEG 可能保留"
+    "已清除 AI 標記的正常 EXIF，HEIF/AVIF 也會保留非 AI 的容器資料。"
+)
+REGIONS_DESCRIPTION = (
+    "以 JSON 字串提供 1 到 20 個原圖像素座標框。格式可為 [[x,y,width,height]] 或"
+    ' [{"x":0,"y":0,"width":10,"height":10}]；x/y 是左上角，寬高必須大於 0，且框不可超出圖片。'
+)
+METHOD_DESCRIPTION = (
+    "OpenCV 修補演算法：telea 通常較快且適合小區域；ns 使用 Navier-Stokes 方法。"
+    "只有 backend=cv2 時生效。"
+)
+DILATE_DESCRIPTION = "修補前將每個遮罩向外擴張的像素數；0 表示不擴張，可用來涵蓋浮水印邊緣。"
+PIPELINE_DESCRIPTION = (
+    "GPU 重生成 pipeline：controlnet（預設）以邊緣條件保留文字、臉部與結構；sdxl 較輕量但在平面圖像上"
+    "可能保留訊號；qwen 最重、需要雲端級 CUDA 資源，但通常最能保留文字與結構。"
+)
+STRENGTH_DESCRIPTION = (
+    "擴散重建強度 0 到 1；值越高通常改動越大。省略時使用偵測到的供應商自適應預設值。"
+)
+STEPS_DESCRIPTION = "擴散去噪步數；增加步數會增加處理時間，且不保證結果一定更好。"
+SEED_DESCRIPTION = "選填的隨機種子；固定模型、參數與執行環境時可協助重現結果，省略則使用隨機結果。"
+FORCE_DESCRIPTION = (
+    "即使本地未偵測到不可見浮水印訊號仍執行 GPU 重生成。可能改動沒有浮水印的圖片，且不代表保證移除訊號。"
+)
+MAX_RESOLUTION_DESCRIPTION = (
+    "擴散處理前的圖片長邊上限（像素）；0 表示不限制。正值可降低 GPU 記憶體需求，但縮小後再放大可能損失細節。"
+)
+MIN_RESOLUTION_DESCRIPTION = (
+    "擴散處理前的圖片長邊下限（像素）；小圖會先放大、完成後還原原尺寸。0 表示停用；若大於 max_resolution，"
+    "且 max_resolution 不為 0，上游會忽略此下限。"
+)
+TILE_DESCRIPTION = (
+    "是否以重疊分塊執行擴散，降低大圖的峰值 GPU 記憶體；只有長邊大於 tile_size 時才啟用。"
+    "建議搭配 max_resolution=0 以保留原解析度。"
+)
+TILE_SIZE_DESCRIPTION = "正方形分塊的邊長（像素）；較小可節省記憶體，但會增加分塊數與處理時間。"
+TILE_OVERLAP_DESCRIPTION = "相鄰分塊的重疊寬度（像素），用於羽化接合並降低接縫；較大會增加重複運算。"
+
+api_key_header = APIKeyHeader(
+    name="X-API-Key",
+    scheme_name="X-API-Key",
+    description="輸入 raiw_ 開頭的完整客戶 API Key；不要加上 X-API-Key: 或 Bearer 前綴。",
+    auto_error=False,
+)
 
 
 def _upstream_version() -> str:
@@ -98,18 +162,22 @@ async def lifespan(app: FastAPI):
     settings.archive_root.mkdir(parents=True, exist_ok=True)
     db = Database(settings.database_path)
     db.initialize()
+    if not settings.require_api_key:
+        anonymous_principal(db)
     app.state.settings = settings
     app.state.db = db
     app.state.archive = ArchiveManager(settings, db)
+    app.openapi_schema = None
     yield
 
 
 app = FastAPI(
     title="C2PA Watermark Toolkit API",
-    summary="具有永久圖片留存與客戶稽核的 AI 浮水印處理 API",
+    summary="AI 浮水印識別、Metadata 清理與影像修補 API",
     description=(
-        "所有通過基本驗證的上傳圖片都會永久保存。除健康檢查、capabilities 與文件外，"
-        "請先在 Swagger 的 Authorize 輸入客戶專屬 X-API-Key。"
+        "除健康檢查、capabilities 與文件外，預設請先在 Swagger 的 Authorize 輸入客戶專屬 "
+        "X-API-Key；部署者可用 "
+        "REQUIRE_API_KEY=false 關閉強制驗證，實際狀態以 capabilities 為準。"
     ),
     version=__version__,
     license_info={"name": "Apache-2.0", "url": "https://www.apache.org/licenses/LICENSE-2.0"},
@@ -119,6 +187,33 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+_default_openapi = app.openapi
+_openapi_mode: bool | None = None
+
+
+def custom_openapi() -> dict[str, Any]:
+    """Describe authentication according to this deployment's runtime setting."""
+    global _openapi_mode
+    require_api_key = get_settings().require_api_key
+    if _openapi_mode != require_api_key:
+        app.openapi_schema = None
+    schema = _default_openapi()
+    if not require_api_key:
+        for path_item in schema.get("paths", {}).values():
+            for operation in path_item.values():
+                if isinstance(operation, dict) and operation.get("security") == [{"X-API-Key": []}]:
+                    operation["security"] = [{}, {"X-API-Key": []}]
+        scheme = schema.get("components", {}).get("securitySchemes", {}).get("X-API-Key")
+        if isinstance(scheme, dict):
+            scheme["description"] = (
+                "此部署未強制要求 API Key。留空會使用匿名身分；若提供金鑰，仍會驗證並歸戶。"
+            )
+    _openapi_mode = require_api_key
+    return schema
+
+
+app.openapi = custom_openapi  # type: ignore[method-assign]
 
 
 @app.middleware("http")
@@ -189,13 +284,16 @@ async def require_principal(
     api_key: Annotated[str | None, Depends(api_key_header)],
 ) -> Principal:
     if not api_key:
-        raise APIError(401, "missing_api_key", "X-API-Key is required")
-    principal = await run_in_threadpool(
-        authenticate_api_key,
-        request.app.state.db,
-        request.app.state.settings.api_key_pepper,
-        api_key,
-    )
+        if request.app.state.settings.require_api_key:
+            raise APIError(401, "missing_api_key", "X-API-Key is required")
+        principal = await run_in_threadpool(anonymous_principal, request.app.state.db)
+    else:
+        principal = await run_in_threadpool(
+            authenticate_api_key,
+            request.app.state.db,
+            request.app.state.settings.api_key_pepper,
+            api_key,
+        )
     if not principal:
         raise APIError(401, "invalid_api_key", "API key is invalid, revoked, or belongs to a disabled customer")
     request.state.customer_id = principal.customer_id
@@ -257,6 +355,7 @@ async def capabilities(request: Request) -> CapabilitiesResponse:
     return CapabilitiesResponse(
         app_version=__version__,
         upstream_version=_upstream_version(),
+        api_key_required=settings.require_api_key,
         supported_formats=["avif", "heic", "heif", "jpeg", "png", "webp"],
         max_upload_mb=settings.max_upload_bytes // 1024 // 1024,
         max_image_pixels=settings.max_image_pixels,
@@ -287,7 +386,7 @@ async def me(principal: Annotated[Principal, Depends(require_principal)]) -> MeR
 async def identify_endpoint(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File(description="PNG, JPEG, WebP, HEIC, HEIF, or AVIF image")],
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
 ) -> IdentifyResponse:
     started = time.perf_counter()
     archived = await _save_upload(request, file, principal, {})
@@ -309,10 +408,12 @@ async def identify_endpoint(
 async def visible_endpoint(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File()],
-    sensitivity: Annotated[Literal["auto", "strict", "assume_ai"], Form()] = "auto",
-    backend: Annotated[Literal["cv2", "migan", "lama"], Form()] = "cv2",
-    strip_metadata: Annotated[bool, Form()] = True,
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
+    sensitivity: Annotated[
+        Literal["auto", "strict", "assume_ai"], Form(description=SENSITIVITY_DESCRIPTION)
+    ] = "auto",
+    backend: Annotated[Literal["cv2", "migan", "lama"], Form(description=BACKEND_DESCRIPTION)] = "cv2",
+    strip_metadata: Annotated[bool, Form(description=STRIP_METADATA_DESCRIPTION)] = True,
 ) -> FileResponse:
     params = {"sensitivity": sensitivity, "backend": backend, "strip_metadata": strip_metadata}
     started = time.perf_counter()
@@ -358,12 +459,12 @@ async def visible_endpoint(
 async def erase_endpoint(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File()],
-    regions: Annotated[str, Form(description='JSON: [[x,y,width,height]] or [{"x":0,"y":0,"width":10,"height":10}]')],
-    backend: Annotated[Literal["cv2", "migan", "lama"], Form()] = "cv2",
-    method: Annotated[Literal["telea", "ns"], Form()] = "telea",
-    dilate: Annotated[int, Form(ge=0, le=100)] = 3,
-    strip_metadata: Annotated[bool, Form()] = True,
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
+    regions: Annotated[str, Form(description=REGIONS_DESCRIPTION)],
+    backend: Annotated[Literal["cv2", "migan", "lama"], Form(description=BACKEND_DESCRIPTION)] = "cv2",
+    method: Annotated[Literal["telea", "ns"], Form(description=METHOD_DESCRIPTION)] = "telea",
+    dilate: Annotated[int, Form(ge=0, le=100, description=DILATE_DESCRIPTION)] = 3,
+    strip_metadata: Annotated[bool, Form(description=STRIP_METADATA_DESCRIPTION)] = True,
 ) -> FileResponse:
     params = {
         "regions": regions,
@@ -416,8 +517,8 @@ async def erase_endpoint(
 async def metadata_endpoint(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File()],
-    keep_standard: Annotated[bool, Form()] = True,
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
+    keep_standard: Annotated[bool, Form(description=KEEP_STANDARD_DESCRIPTION)] = True,
 ) -> FileResponse:
     params = {"keep_standard": keep_standard}
     started = time.perf_counter()
@@ -525,18 +626,20 @@ async def _submit_job(
 async def invisible_job(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File()],
-    pipeline: Annotated[Literal["controlnet", "sdxl", "qwen"], Form()] = "controlnet",
-    strength: Annotated[float | None, Form(ge=0, le=1)] = None,
-    steps: Annotated[int, Form(ge=1, le=200)] = 50,
-    seed: Annotated[int | None, Form()] = None,
-    force: Annotated[bool, Form()] = False,
-    strip_metadata: Annotated[bool, Form()] = True,
-    max_resolution: Annotated[int, Form(ge=0, le=8192)] = 0,
-    min_resolution: Annotated[int, Form(ge=0, le=4096)] = 1024,
-    tile: Annotated[bool, Form()] = False,
-    tile_size: Annotated[int, Form(ge=512, le=2048)] = 1024,
-    tile_overlap: Annotated[int, Form(ge=0, le=512)] = 128,
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
+    pipeline: Annotated[
+        Literal["controlnet", "sdxl", "qwen"], Form(description=PIPELINE_DESCRIPTION)
+    ] = "controlnet",
+    strength: Annotated[float | None, Form(ge=0, le=1, description=STRENGTH_DESCRIPTION)] = None,
+    steps: Annotated[int, Form(ge=1, le=200, description=STEPS_DESCRIPTION)] = 50,
+    seed: Annotated[int | None, Form(description=SEED_DESCRIPTION)] = None,
+    force: Annotated[bool, Form(description=FORCE_DESCRIPTION)] = False,
+    strip_metadata: Annotated[bool, Form(description=STRIP_METADATA_DESCRIPTION)] = True,
+    max_resolution: Annotated[int, Form(ge=0, le=8192, description=MAX_RESOLUTION_DESCRIPTION)] = 0,
+    min_resolution: Annotated[int, Form(ge=0, le=4096, description=MIN_RESOLUTION_DESCRIPTION)] = 1024,
+    tile: Annotated[bool, Form(description=TILE_DESCRIPTION)] = False,
+    tile_size: Annotated[int, Form(ge=512, le=2048, description=TILE_SIZE_DESCRIPTION)] = 1024,
+    tile_overlap: Annotated[int, Form(ge=0, le=512, description=TILE_OVERLAP_DESCRIPTION)] = 128,
 ) -> JobAccepted:
     params = _gpu_params(
         pipeline=pipeline,
@@ -560,19 +663,23 @@ async def invisible_job(
 async def all_job(
     request: Request,
     principal: Annotated[Principal, Depends(require_principal)],
-    file: Annotated[UploadFile, File()],
-    pipeline: Annotated[Literal["controlnet", "sdxl", "qwen"], Form()] = "controlnet",
-    strength: Annotated[float | None, Form(ge=0, le=1)] = None,
-    steps: Annotated[int, Form(ge=1, le=200)] = 50,
-    seed: Annotated[int | None, Form()] = None,
-    force: Annotated[bool, Form()] = False,
-    sensitivity: Annotated[Literal["auto", "strict", "assume_ai"], Form()] = "auto",
-    backend: Annotated[Literal["cv2", "migan", "lama"], Form()] = "cv2",
-    max_resolution: Annotated[int, Form(ge=0, le=8192)] = 0,
-    min_resolution: Annotated[int, Form(ge=0, le=4096)] = 1024,
-    tile: Annotated[bool, Form()] = False,
-    tile_size: Annotated[int, Form(ge=512, le=2048)] = 1024,
-    tile_overlap: Annotated[int, Form(ge=0, le=512)] = 128,
+    file: Annotated[UploadFile, File(description=UPLOAD_DESCRIPTION)],
+    pipeline: Annotated[
+        Literal["controlnet", "sdxl", "qwen"], Form(description=PIPELINE_DESCRIPTION)
+    ] = "controlnet",
+    strength: Annotated[float | None, Form(ge=0, le=1, description=STRENGTH_DESCRIPTION)] = None,
+    steps: Annotated[int, Form(ge=1, le=200, description=STEPS_DESCRIPTION)] = 50,
+    seed: Annotated[int | None, Form(description=SEED_DESCRIPTION)] = None,
+    force: Annotated[bool, Form(description=FORCE_DESCRIPTION)] = False,
+    sensitivity: Annotated[
+        Literal["auto", "strict", "assume_ai"], Form(description=SENSITIVITY_DESCRIPTION)
+    ] = "auto",
+    backend: Annotated[Literal["cv2", "migan", "lama"], Form(description=BACKEND_DESCRIPTION)] = "cv2",
+    max_resolution: Annotated[int, Form(ge=0, le=8192, description=MAX_RESOLUTION_DESCRIPTION)] = 0,
+    min_resolution: Annotated[int, Form(ge=0, le=4096, description=MIN_RESOLUTION_DESCRIPTION)] = 1024,
+    tile: Annotated[bool, Form(description=TILE_DESCRIPTION)] = False,
+    tile_size: Annotated[int, Form(ge=512, le=2048, description=TILE_SIZE_DESCRIPTION)] = 1024,
+    tile_overlap: Annotated[int, Form(ge=0, le=512, description=TILE_OVERLAP_DESCRIPTION)] = 128,
 ) -> JobAccepted:
     params = _gpu_params(
         pipeline=pipeline,
@@ -605,7 +712,7 @@ def _authorized_job(request: Request, principal: Principal, job_id: str) -> tupl
 @app.get("/api/v1/jobs/{job_id}", response_model=JobStatus, tags=["GPU Jobs"])
 async def get_job(
     request: Request,
-    job_id: str,
+    job_id: Annotated[str, PathParameter(description="提交 GPU 工作時取得的 job_id；只能查詢同一客戶的工作。")],
     principal: Annotated[Principal, Depends(require_principal)],
 ) -> JobStatus:
     job, _ = _authorized_job(request, principal, job_id)
@@ -630,7 +737,9 @@ async def get_job(
 @app.get("/api/v1/jobs/{job_id}/result", tags=["GPU Jobs"])
 async def get_job_result(
     request: Request,
-    job_id: str,
+    job_id: Annotated[
+        str, PathParameter(description="已成功完成的 GPU job_id；工作未完成時回傳 409，結果遺失時回傳 410。")
+    ],
     principal: Annotated[Principal, Depends(require_principal)],
 ) -> FileResponse:
     job, archive = _authorized_job(request, principal, job_id)

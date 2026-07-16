@@ -5,13 +5,21 @@ import type { Customer } from "../types";
 
 interface ConnectionPanelProps {
   customer: Customer | null;
+  apiKeyRequired: boolean;
   loading: boolean;
   onConnect: (key: string) => Promise<void>;
   onDisconnect: () => void;
   t: (key: MessageKey) => string;
 }
 
-export function ConnectionPanel({ customer, loading, onConnect, onDisconnect, t }: ConnectionPanelProps) {
+export function ConnectionPanel({
+  customer,
+  apiKeyRequired,
+  loading,
+  onConnect,
+  onDisconnect,
+  t
+}: ConnectionPanelProps) {
   const [key, setKey] = useState("");
   const [visible, setVisible] = useState(false);
 
@@ -30,13 +38,31 @@ export function ConnectionPanel({ customer, loading, onConnect, onDisconnect, t 
         </div>
         <div className="customer-copy">
           <span>{t("connectedAs")}</span>
-          <strong>{customer.customer_name}</strong>
-          <small>{t("keyPrefix")}: {customer.key_prefix}</small>
+          <strong>{customer.key_id ? customer.customer_name : t("anonymousCustomer")}</strong>
+          <small>
+            {customer.key_prefix ? `${t("keyPrefix")}: ${customer.key_prefix}` : t("anonymousAccess")}
+          </small>
         </div>
-        <button className="button ghost compact" type="button" onClick={onDisconnect}>
-          <LogOut size={16} />
-          {t("disconnect")}
-        </button>
+        {customer.key_id && (
+          <button className="button ghost compact" type="button" onClick={onDisconnect}>
+            <LogOut size={16} />
+            {t("disconnect")}
+          </button>
+        )}
+      </section>
+    );
+  }
+
+  if (!apiKeyRequired) {
+    return (
+      <section className="connection connected-card" aria-live="polite">
+        <div className="customer-badge" aria-hidden="true">
+          <ShieldCheck size={22} />
+        </div>
+        <div className="customer-copy">
+          <span>{t("anonymousAccess")}</span>
+          <strong>{loading ? t("connecting") : t("anonymousConnecting")}</strong>
+        </div>
       </section>
     );
   }

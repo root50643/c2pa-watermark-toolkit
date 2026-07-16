@@ -214,94 +214,120 @@ export interface components {
     schemas: {
         /** Body_all_job_api_v1_jobs_all_post */
         Body_all_job_api_v1_jobs_all_post: {
-            /** File */
+            /**
+             * File
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
+             */
             file: string;
             /**
              * Pipeline
+             * @description GPU 重生成 pipeline：controlnet（預設）以邊緣條件保留文字、臉部與結構；sdxl 較輕量但在平面圖像上可能保留訊號；qwen 最重、需要雲端級 CUDA 資源，但通常最能保留文字與結構。
              * @default controlnet
              * @enum {string}
              */
             pipeline: "controlnet" | "sdxl" | "qwen";
-            /** Strength */
+            /**
+             * Strength
+             * @description 擴散重建強度 0 到 1；值越高通常改動越大。省略時使用偵測到的供應商自適應預設值。
+             */
             strength?: number | null;
             /**
              * Steps
+             * @description 擴散去噪步數；增加步數會增加處理時間，且不保證結果一定更好。
              * @default 50
              */
             steps: number;
-            /** Seed */
+            /**
+             * Seed
+             * @description 選填的隨機種子；固定模型、參數與執行環境時可協助重現結果，省略則使用隨機結果。
+             */
             seed?: number | null;
             /**
              * Force
+             * @description 即使本地未偵測到不可見浮水印訊號仍執行 GPU 重生成。可能改動沒有浮水印的圖片，且不代表保證移除訊號。
              * @default false
              */
             force: boolean;
             /**
              * Sensitivity
+             * @description 可見標記偵測策略：auto 只在 metadata 或同產品標記提供佐證時放寬門檻；strict 永不放寬，誤判風險最低；assume_ai 對所有已知標記放寬門檻，適合已知為 AI 圖片但較可能誤判。
              * @default auto
              * @enum {string}
              */
             sensitivity: "auto" | "strict" | "assume_ai";
             /**
              * Backend
+             * @description 指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。
              * @default cv2
              * @enum {string}
              */
             backend: "cv2" | "migan" | "lama";
             /**
              * Max Resolution
+             * @description 擴散處理前的圖片長邊上限（像素）；0 表示不限制。正值可降低 GPU 記憶體需求，但縮小後再放大可能損失細節。
              * @default 0
              */
             max_resolution: number;
             /**
              * Min Resolution
+             * @description 擴散處理前的圖片長邊下限（像素）；小圖會先放大、完成後還原原尺寸。0 表示停用；若大於 max_resolution，且 max_resolution 不為 0，上游會忽略此下限。
              * @default 1024
              */
             min_resolution: number;
             /**
              * Tile
+             * @description 是否以重疊分塊執行擴散，降低大圖的峰值 GPU 記憶體；只有長邊大於 tile_size 時才啟用。建議搭配 max_resolution=0 以保留原解析度。
              * @default false
              */
             tile: boolean;
             /**
              * Tile Size
+             * @description 正方形分塊的邊長（像素）；較小可節省記憶體，但會增加分塊數與處理時間。
              * @default 1024
              */
             tile_size: number;
             /**
              * Tile Overlap
+             * @description 相鄰分塊的重疊寬度（像素），用於羽化接合並降低接縫；較大會增加重複運算。
              * @default 128
              */
             tile_overlap: number;
         };
         /** Body_erase_endpoint_api_v1_remove_erase_post */
         Body_erase_endpoint_api_v1_remove_erase_post: {
-            /** File */
+            /**
+             * File
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
+             */
             file: string;
             /**
              * Regions
-             * @description JSON: [[x,y,width,height]] or [{"x":0,"y":0,"width":10,"height":10}]
+             * @description 以 JSON 字串提供 1 到 20 個原圖像素座標框。格式可為 [[x,y,width,height]] 或 [{"x":0,"y":0,"width":10,"height":10}]；x/y 是左上角，寬高必須大於 0，且框不可超出圖片。
              */
             regions: string;
             /**
              * Backend
+             * @description 指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。
              * @default cv2
              * @enum {string}
              */
             backend: "cv2" | "migan" | "lama";
             /**
              * Method
+             * @description OpenCV 修補演算法：telea 通常較快且適合小區域；ns 使用 Navier-Stokes 方法。只有 backend=cv2 時生效。
              * @default telea
              * @enum {string}
              */
             method: "telea" | "ns";
             /**
              * Dilate
+             * @description 修補前將每個遮罩向外擴張的像素數；0 表示不擴張，可用來涵蓋浮水印邊緣。
              * @default 3
              */
             dilate: number;
             /**
              * Strip Metadata
+             * @description 是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。
              * @default true
              */
             strip_metadata: boolean;
@@ -310,201 +336,339 @@ export interface components {
         Body_identify_endpoint_api_v1_identify_post: {
             /**
              * File
-             * @description PNG, JPEG, WebP, HEIC, HEIF, or AVIF image
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
              */
             file: string;
         };
         /** Body_invisible_job_api_v1_jobs_invisible_post */
         Body_invisible_job_api_v1_jobs_invisible_post: {
-            /** File */
+            /**
+             * File
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
+             */
             file: string;
             /**
              * Pipeline
+             * @description GPU 重生成 pipeline：controlnet（預設）以邊緣條件保留文字、臉部與結構；sdxl 較輕量但在平面圖像上可能保留訊號；qwen 最重、需要雲端級 CUDA 資源，但通常最能保留文字與結構。
              * @default controlnet
              * @enum {string}
              */
             pipeline: "controlnet" | "sdxl" | "qwen";
-            /** Strength */
+            /**
+             * Strength
+             * @description 擴散重建強度 0 到 1；值越高通常改動越大。省略時使用偵測到的供應商自適應預設值。
+             */
             strength?: number | null;
             /**
              * Steps
+             * @description 擴散去噪步數；增加步數會增加處理時間，且不保證結果一定更好。
              * @default 50
              */
             steps: number;
-            /** Seed */
+            /**
+             * Seed
+             * @description 選填的隨機種子；固定模型、參數與執行環境時可協助重現結果，省略則使用隨機結果。
+             */
             seed?: number | null;
             /**
              * Force
+             * @description 即使本地未偵測到不可見浮水印訊號仍執行 GPU 重生成。可能改動沒有浮水印的圖片，且不代表保證移除訊號。
              * @default false
              */
             force: boolean;
             /**
              * Strip Metadata
+             * @description 是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。
              * @default true
              */
             strip_metadata: boolean;
             /**
              * Max Resolution
+             * @description 擴散處理前的圖片長邊上限（像素）；0 表示不限制。正值可降低 GPU 記憶體需求，但縮小後再放大可能損失細節。
              * @default 0
              */
             max_resolution: number;
             /**
              * Min Resolution
+             * @description 擴散處理前的圖片長邊下限（像素）；小圖會先放大、完成後還原原尺寸。0 表示停用；若大於 max_resolution，且 max_resolution 不為 0，上游會忽略此下限。
              * @default 1024
              */
             min_resolution: number;
             /**
              * Tile
+             * @description 是否以重疊分塊執行擴散，降低大圖的峰值 GPU 記憶體；只有長邊大於 tile_size 時才啟用。建議搭配 max_resolution=0 以保留原解析度。
              * @default false
              */
             tile: boolean;
             /**
              * Tile Size
+             * @description 正方形分塊的邊長（像素）；較小可節省記憶體，但會增加分塊數與處理時間。
              * @default 1024
              */
             tile_size: number;
             /**
              * Tile Overlap
+             * @description 相鄰分塊的重疊寬度（像素），用於羽化接合並降低接縫；較大會增加重複運算。
              * @default 128
              */
             tile_overlap: number;
         };
         /** Body_metadata_endpoint_api_v1_remove_metadata_post */
         Body_metadata_endpoint_api_v1_remove_metadata_post: {
-            /** File */
+            /**
+             * File
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
+             */
             file: string;
             /**
              * Keep Standard
+             * @description true（預設）會移除 AI/C2PA 資訊，同時盡量保留非 AI 的一般欄位，例如 Author、Title、Description、Copyright、Comment、Software、Source 與 Creation Time；false 不保留這些白名單文字欄位，採較積極的清理。上游會依格式採不同的無損策略，因此 false 不保證清空所有 metadata：JPEG 可能保留已清除 AI 標記的正常 EXIF，HEIF/AVIF 也會保留非 AI 的容器資料。
              * @default true
              */
             keep_standard: boolean;
         };
         /** Body_visible_endpoint_api_v1_remove_visible_post */
         Body_visible_endpoint_api_v1_remove_visible_post: {
-            /** File */
+            /**
+             * File
+             * @description 要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。
+             */
             file: string;
             /**
              * Sensitivity
+             * @description 可見標記偵測策略：auto 只在 metadata 或同產品標記提供佐證時放寬門檻；strict 永不放寬，誤判風險最低；assume_ai 對所有已知標記放寬門檻，適合已知為 AI 圖片但較可能誤判。
              * @default auto
              * @enum {string}
              */
             sensitivity: "auto" | "strict" | "assume_ai";
             /**
              * Backend
+             * @description 指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。
              * @default cv2
              * @enum {string}
              */
             backend: "cv2" | "migan" | "lama";
             /**
              * Strip Metadata
+             * @description 是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。
              * @default true
              */
             strip_metadata: boolean;
         };
         /** CapabilitiesResponse */
         CapabilitiesResponse: {
-            /** App Version */
+            /**
+             * App Version
+             * @description 目前 API 應用程式版本。
+             */
             app_version: string;
-            /** Upstream Version */
+            /**
+             * Upstream Version
+             * @description 固定使用的 remove-ai-watermarks 上游版本。
+             */
             upstream_version: string;
-            /** Supported Formats */
+            /**
+             * Api Key Required
+             * @description 目前部署是否強制要求 X-API-Key；false 表示未帶金鑰時會使用匿名身分。
+             */
+            api_key_required: boolean;
+            /**
+             * Supported Formats
+             * @description 伺服器接受的圖片副檔名（不含句點）。
+             */
             supported_formats: string[];
-            /** Max Upload Mb */
+            /**
+             * Max Upload Mb
+             * @description 單一上傳檔案的大小上限，單位為 MiB。
+             */
             max_upload_mb: number;
-            /** Max Image Pixels */
+            /**
+             * Max Image Pixels
+             * @description 圖片解碼後的寬乘高像素上限。
+             */
             max_image_pixels: number;
-            /** Archive Ready */
+            /**
+             * Archive Ready
+             * @description Archive 儲存與 SQLite 是否可用。
+             */
             archive_ready: boolean;
-            /** Redis Ready */
+            /**
+             * Redis Ready
+             * @description Redis GPU queue 是否可連線；false 時 GPU 工作端點回傳 503。
+             */
             redis_ready: boolean;
-            /** Visible Backends */
+            /**
+             * Visible Backends
+             * @description 可在可見移除與區域修補選用的 backend 名稱。
+             */
             visible_backends: string[];
-            /** Gpu Pipelines */
+            /**
+             * Gpu Pipelines
+             * @description GPU 不可見浮水印重生成可選用的 pipeline 名稱。
+             */
             gpu_pipelines: string[];
         };
         /** ErrorBody */
         ErrorBody: {
-            /** Code */
+            /**
+             * Code
+             * @description 穩定、可供程式判斷的錯誤碼。
+             */
             code: string;
-            /** Message */
+            /**
+             * Message
+             * @description 適合顯示或記錄的錯誤摘要。
+             */
             message: string;
-            /** Details */
+            /**
+             * Details
+             * @description 選填的結構化驗證或診斷資訊；不包含 API Key 等秘密。
+             */
             details?: unknown;
-            /** Request Id */
+            /**
+             * Request Id
+             * @description 本次 HTTP 請求的追蹤 ID，亦會出現在 X-Request-ID 回應標頭。
+             */
             request_id: string;
         };
         /** ErrorResponse */
         ErrorResponse: {
+            /** @description 統一錯誤內容。 */
             error: components["schemas"]["ErrorBody"];
         };
         /** IdentifyResponse */
         IdentifyResponse: {
-            /** Request Id */
+            /**
+             * Request Id
+             * @description 本次 HTTP 請求的追蹤 ID。
+             */
             request_id: string;
-            /** Archive Id */
+            /**
+             * Archive Id
+             * @description 處理紀錄 ID；目前與 request_id 相同。
+             */
             archive_id: string;
-            /** Report */
+            /**
+             * Report
+             * @description 上游辨識報告，包含格式、尺寸、AI provenance、可見及不可見浮水印訊號。
+             */
             report: {
                 [key: string]: unknown;
             };
         };
         /** JobAccepted */
         JobAccepted: {
-            /** Job Id */
+            /**
+             * Job Id
+             * @description GPU 非同步工作的唯一 ID。
+             */
             job_id: string;
-            /** Archive Id */
+            /**
+             * Archive Id
+             * @description 此工作的處理紀錄 ID。
+             */
             archive_id: string;
             /**
              * Status
+             * @description 接受工作時固定為 queued。
              * @default queued
              * @constant
              */
             status: "queued";
-            /** Status Url */
+            /**
+             * Status Url
+             * @description 輪詢工作狀態與進度的 URL；預設需相同客戶的 API Key，無 Key 模式則不帶金鑰。
+             */
             status_url: string;
-            /** Result Url */
+            /**
+             * Result Url
+             * @description 結果下載 URL；工作成功前呼叫會回傳 409。
+             */
             result_url: string;
         };
         /** JobStatus */
         JobStatus: {
-            /** Job Id */
+            /**
+             * Job Id
+             * @description GPU 非同步工作的唯一 ID。
+             */
             job_id: string;
-            /** Archive Id */
+            /**
+             * Archive Id
+             * @description 此工作的處理紀錄 ID。
+             */
             archive_id: string;
-            /** Task Name */
+            /**
+             * Task Name
+             * @description 工作流程名稱，目前為 invisible 或 all。
+             */
             task_name: string;
             /**
              * Status
+             * @description 目前工作狀態。
              * @enum {string}
              */
             status: "queued" | "running" | "succeeded" | "failed";
-            /** Progress */
+            /**
+             * Progress
+             * @description 伺服器估算的完成百分比；不是精確剩餘時間。
+             */
             progress: number;
-            /** Message */
+            /**
+             * Message
+             * @description 目前階段或完成訊息；沒有訊息時為 null。
+             */
             message?: string | null;
-            /** Error */
+            /**
+             * Error
+             * @description 失敗時的錯誤碼與訊息；其他狀態為 null。
+             */
             error?: {
                 [key: string]: unknown;
             } | null;
-            /** Created At */
+            /**
+             * Created At
+             * @description 工作建立時間，UTC ISO 8601 字串。
+             */
             created_at: string;
-            /** Updated At */
+            /**
+             * Updated At
+             * @description 工作最後更新時間，UTC ISO 8601 字串。
+             */
             updated_at: string;
-            /** Result Url */
+            /**
+             * Result Url
+             * @description 成功後的下載 URL；尚未成功時為 null。
+             */
             result_url?: string | null;
         };
         /** MeResponse */
         MeResponse: {
-            /** Customer Id */
+            /**
+             * Customer Id
+             * @description 目前認證或匿名身分對應客戶的內部 ID。
+             */
             customer_id: string;
-            /** Customer Name */
+            /**
+             * Customer Name
+             * @description 目前客戶或匿名身分的顯示名稱。
+             */
             customer_name: string;
-            /** External Id */
+            /**
+             * External Id
+             * @description 部署者設定的外部客戶編號；未設定時為 null。
+             */
             external_id: string | null;
-            /** Key Id */
-            key_id: string;
-            /** Key Prefix */
-            key_prefix: string;
+            /**
+             * Key Id
+             * @description 本次認證所用金鑰的內部 ID；停用 API Key 驗證並以匿名身分呼叫時為 null。
+             */
+            key_id: string | null;
+            /**
+             * Key Prefix
+             * @description 金鑰的非秘密前綴；停用 API Key 驗證並以匿名身分呼叫時為 null。
+             */
+            key_prefix: string | null;
         };
     };
     responses: never;
@@ -956,6 +1120,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description 提交 GPU 工作時取得的 job_id；只能查詢同一客戶的工作。 */
                 job_id: string;
             };
             cookie?: never;
@@ -996,6 +1161,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description 已成功完成的 GPU job_id；工作未完成時回傳 409，結果遺失時回傳 410。 */
                 job_id: string;
             };
             cookie?: never;

@@ -120,6 +120,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem(API_KEY_SESSION_KEY) ?? "");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [anonymousAttempted, setAnonymousAttempted] = useState(false);
   const [operation, setOperation] = useState<Operation>("metadata");
   const [file, setFile] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -189,7 +190,8 @@ export default function App() {
       setError(null);
       try {
         const nextCustomer = await authenticate(key);
-        sessionStorage.setItem(API_KEY_SESSION_KEY, key);
+        if (key) sessionStorage.setItem(API_KEY_SESSION_KEY, key);
+        else sessionStorage.removeItem(API_KEY_SESSION_KEY);
         setApiKey(key);
         setCustomer(nextCustomer);
       } catch (caught) {
@@ -205,14 +207,23 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (apiKey && !customer) void connect(apiKey);
-  }, [apiKey, connect, customer]);
+    if (!capabilities || customer || authLoading) return;
+    if (apiKey) {
+      void connect(apiKey);
+      return;
+    }
+    if (!capabilities.api_key_required && !anonymousAttempted) {
+      setAnonymousAttempted(true);
+      void connect("");
+    }
+  }, [anonymousAttempted, apiKey, authLoading, capabilities, connect, customer]);
 
   const disconnect = () => {
     sessionStorage.removeItem(API_KEY_SESSION_KEY);
     sessionStorage.removeItem(JOBS_SESSION_KEY);
     setApiKey("");
     setCustomer(null);
+    setAnonymousAttempted(false);
     setJobs([]);
     setError(null);
   };
@@ -265,7 +276,7 @@ export default function App() {
 
   const refreshJob = useCallback(
     async (jobId: string) => {
-      if (!apiKey) return;
+      if (!customer) return;
       try {
         const status = await getJob(jobId, apiKey);
         setJobs((current) => current.map((job) => (job.jobId === jobId ? { ...job, status, pollingError: undefined } : job)));
@@ -274,11 +285,11 @@ export default function App() {
         setJobs((current) => current.map((job) => (job.jobId === jobId ? { ...job, pollingError: message } : job)));
       }
     },
-    [apiKey, explainError]
+    [apiKey, customer, explainError]
   );
 
   useEffect(() => {
-    if (!apiKey || !activeJobKey) return;
+    if (!customer || !activeJobKey) return;
     let cancelled = false;
     let timer: number | undefined;
     const jobIds = activeJobKey.split(",").filter(Boolean);
@@ -291,7 +302,7 @@ export default function App() {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [activeJobKey, apiKey, refreshJob]);
+  }, [activeJobKey, customer, refreshJob]);
 
   const chooseOperation = (next: Operation) => {
     setOperation(next);
@@ -324,7 +335,7 @@ export default function App() {
   };
 
   const runOperation = async () => {
-    if (!file || !apiKey) {
+    if (!file || !customer) {
       setError({ message: t("missingFile") });
       return;
     }
@@ -381,7 +392,7 @@ export default function App() {
   };
 
   const fetchJobResult = async (job: TrackedJob) => {
-    if (!apiKey) return;
+    if (!customer) return;
     setBusyJob(job.jobId);
     setError(null);
     try {
@@ -429,7 +440,14 @@ export default function App() {
           <SystemStatus capabilities={capabilities} ready={ready} loading={statusLoading} onRefresh={refreshStatus} t={t} />
         </section>
 
-        <ConnectionPanel customer={customer} loading={authLoading} onConnect={connect} onDisconnect={disconnect} t={t} />
+        <ConnectionPanel
+          customer={customer}
+          apiKeyRequired={capabilities?.api_key_required ?? true}
+          loading={authLoading}
+          onConnect={connect}
+          onDisconnect={disconnect}
+          t={t}
+        />
 
         {customer && (
           <>

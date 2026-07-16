@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "C2PA Watermark Toolkit API",
-    "summary": "具有永久圖片留存與客戶稽核的 AI 浮水印處理 API",
-    "description": "所有通過基本驗證的上傳圖片都會永久保存。除健康檢查、capabilities 與文件外，請先在 Swagger 的 Authorize 輸入客戶專屬 X-API-Key。",
+    "summary": "AI 浮水印識別、Metadata 清理與影像修補 API",
+    "description": "除健康檢查、capabilities 與文件外，預設請先在 Swagger 的 Authorize 輸入客戶專屬 X-API-Key；部署者可用 REQUIRE_API_KEY=false 關閉強制驗證，實際狀態以 capabilities 為準。",
     "license": {
       "name": "Apache-2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0"
@@ -177,7 +177,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -263,7 +263,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -318,7 +318,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -373,7 +373,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -428,7 +428,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -484,7 +484,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -540,7 +540,7 @@
         },
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ]
       }
@@ -554,7 +554,7 @@
         "operationId": "get_job_api_v1_jobs__job_id__get",
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ],
         "parameters": [
@@ -564,8 +564,10 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "提交 GPU 工作時取得的 job_id；只能查詢同一客戶的工作。",
               "title": "Job Id"
-            }
+            },
+            "description": "提交 GPU 工作時取得的 job_id；只能查詢同一客戶的工作。"
           }
         ],
         "responses": {
@@ -611,7 +613,7 @@
         "operationId": "get_job_result_api_v1_jobs__job_id__result_get",
         "security": [
           {
-            "APIKeyHeader": []
+            "X-API-Key": []
           }
         ],
         "parameters": [
@@ -621,8 +623,10 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "已成功完成的 GPU job_id；工作未完成時回傳 409，結果遺失時回傳 410。",
               "title": "Job Id"
-            }
+            },
+            "description": "已成功完成的 GPU job_id；工作未完成時回傳 409，結果遺失時回傳 410。"
           }
         ],
         "responses": {
@@ -665,7 +669,8 @@
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
-            "title": "File"
+            "title": "File",
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           },
           "pipeline": {
             "type": "string",
@@ -675,6 +680,7 @@
               "qwen"
             ],
             "title": "Pipeline",
+            "description": "GPU 重生成 pipeline：controlnet（預設）以邊緣條件保留文字、臉部與結構；sdxl 較輕量但在平面圖像上可能保留訊號；qwen 最重、需要雲端級 CUDA 資源，但通常最能保留文字與結構。",
             "default": "controlnet"
           },
           "strength": {
@@ -688,13 +694,15 @@
                 "type": "null"
               }
             ],
-            "title": "Strength"
+            "title": "Strength",
+            "description": "擴散重建強度 0 到 1；值越高通常改動越大。省略時使用偵測到的供應商自適應預設值。"
           },
           "steps": {
             "type": "integer",
             "maximum": 200.0,
             "minimum": 1.0,
             "title": "Steps",
+            "description": "擴散去噪步數；增加步數會增加處理時間，且不保證結果一定更好。",
             "default": 50
           },
           "seed": {
@@ -706,11 +714,13 @@
                 "type": "null"
               }
             ],
-            "title": "Seed"
+            "title": "Seed",
+            "description": "選填的隨機種子；固定模型、參數與執行環境時可協助重現結果，省略則使用隨機結果。"
           },
           "force": {
             "type": "boolean",
             "title": "Force",
+            "description": "即使本地未偵測到不可見浮水印訊號仍執行 GPU 重生成。可能改動沒有浮水印的圖片，且不代表保證移除訊號。",
             "default": false
           },
           "sensitivity": {
@@ -721,6 +731,7 @@
               "assume_ai"
             ],
             "title": "Sensitivity",
+            "description": "可見標記偵測策略：auto 只在 metadata 或同產品標記提供佐證時放寬門檻；strict 永不放寬，誤判風險最低；assume_ai 對所有已知標記放寬門檻，適合已知為 AI 圖片但較可能誤判。",
             "default": "auto"
           },
           "backend": {
@@ -731,6 +742,7 @@
               "lama"
             ],
             "title": "Backend",
+            "description": "指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。",
             "default": "cv2"
           },
           "max_resolution": {
@@ -738,6 +750,7 @@
             "maximum": 8192.0,
             "minimum": 0.0,
             "title": "Max Resolution",
+            "description": "擴散處理前的圖片長邊上限（像素）；0 表示不限制。正值可降低 GPU 記憶體需求，但縮小後再放大可能損失細節。",
             "default": 0
           },
           "min_resolution": {
@@ -745,11 +758,13 @@
             "maximum": 4096.0,
             "minimum": 0.0,
             "title": "Min Resolution",
+            "description": "擴散處理前的圖片長邊下限（像素）；小圖會先放大、完成後還原原尺寸。0 表示停用；若大於 max_resolution，且 max_resolution 不為 0，上游會忽略此下限。",
             "default": 1024
           },
           "tile": {
             "type": "boolean",
             "title": "Tile",
+            "description": "是否以重疊分塊執行擴散，降低大圖的峰值 GPU 記憶體；只有長邊大於 tile_size 時才啟用。建議搭配 max_resolution=0 以保留原解析度。",
             "default": false
           },
           "tile_size": {
@@ -757,6 +772,7 @@
             "maximum": 2048.0,
             "minimum": 512.0,
             "title": "Tile Size",
+            "description": "正方形分塊的邊長（像素）；較小可節省記憶體，但會增加分塊數與處理時間。",
             "default": 1024
           },
           "tile_overlap": {
@@ -764,6 +780,7 @@
             "maximum": 512.0,
             "minimum": 0.0,
             "title": "Tile Overlap",
+            "description": "相鄰分塊的重疊寬度（像素），用於羽化接合並降低接縫；較大會增加重複運算。",
             "default": 128
           }
         },
@@ -778,12 +795,13 @@
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
-            "title": "File"
+            "title": "File",
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           },
           "regions": {
             "type": "string",
             "title": "Regions",
-            "description": "JSON: [[x,y,width,height]] or [{\"x\":0,\"y\":0,\"width\":10,\"height\":10}]"
+            "description": "以 JSON 字串提供 1 到 20 個原圖像素座標框。格式可為 [[x,y,width,height]] 或 [{\"x\":0,\"y\":0,\"width\":10,\"height\":10}]；x/y 是左上角，寬高必須大於 0，且框不可超出圖片。"
           },
           "backend": {
             "type": "string",
@@ -793,6 +811,7 @@
               "lama"
             ],
             "title": "Backend",
+            "description": "指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。",
             "default": "cv2"
           },
           "method": {
@@ -802,6 +821,7 @@
               "ns"
             ],
             "title": "Method",
+            "description": "OpenCV 修補演算法：telea 通常較快且適合小區域；ns 使用 Navier-Stokes 方法。只有 backend=cv2 時生效。",
             "default": "telea"
           },
           "dilate": {
@@ -809,11 +829,13 @@
             "maximum": 100.0,
             "minimum": 0.0,
             "title": "Dilate",
+            "description": "修補前將每個遮罩向外擴張的像素數；0 表示不擴張，可用來涵蓋浮水印邊緣。",
             "default": 3
           },
           "strip_metadata": {
             "type": "boolean",
             "title": "Strip Metadata",
+            "description": "是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。",
             "default": true
           }
         },
@@ -830,7 +852,7 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File",
-            "description": "PNG, JPEG, WebP, HEIC, HEIF, or AVIF image"
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           }
         },
         "type": "object",
@@ -844,7 +866,8 @@
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
-            "title": "File"
+            "title": "File",
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           },
           "pipeline": {
             "type": "string",
@@ -854,6 +877,7 @@
               "qwen"
             ],
             "title": "Pipeline",
+            "description": "GPU 重生成 pipeline：controlnet（預設）以邊緣條件保留文字、臉部與結構；sdxl 較輕量但在平面圖像上可能保留訊號；qwen 最重、需要雲端級 CUDA 資源，但通常最能保留文字與結構。",
             "default": "controlnet"
           },
           "strength": {
@@ -867,13 +891,15 @@
                 "type": "null"
               }
             ],
-            "title": "Strength"
+            "title": "Strength",
+            "description": "擴散重建強度 0 到 1；值越高通常改動越大。省略時使用偵測到的供應商自適應預設值。"
           },
           "steps": {
             "type": "integer",
             "maximum": 200.0,
             "minimum": 1.0,
             "title": "Steps",
+            "description": "擴散去噪步數；增加步數會增加處理時間，且不保證結果一定更好。",
             "default": 50
           },
           "seed": {
@@ -885,16 +911,19 @@
                 "type": "null"
               }
             ],
-            "title": "Seed"
+            "title": "Seed",
+            "description": "選填的隨機種子；固定模型、參數與執行環境時可協助重現結果，省略則使用隨機結果。"
           },
           "force": {
             "type": "boolean",
             "title": "Force",
+            "description": "即使本地未偵測到不可見浮水印訊號仍執行 GPU 重生成。可能改動沒有浮水印的圖片，且不代表保證移除訊號。",
             "default": false
           },
           "strip_metadata": {
             "type": "boolean",
             "title": "Strip Metadata",
+            "description": "是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。",
             "default": true
           },
           "max_resolution": {
@@ -902,6 +931,7 @@
             "maximum": 8192.0,
             "minimum": 0.0,
             "title": "Max Resolution",
+            "description": "擴散處理前的圖片長邊上限（像素）；0 表示不限制。正值可降低 GPU 記憶體需求，但縮小後再放大可能損失細節。",
             "default": 0
           },
           "min_resolution": {
@@ -909,11 +939,13 @@
             "maximum": 4096.0,
             "minimum": 0.0,
             "title": "Min Resolution",
+            "description": "擴散處理前的圖片長邊下限（像素）；小圖會先放大、完成後還原原尺寸。0 表示停用；若大於 max_resolution，且 max_resolution 不為 0，上游會忽略此下限。",
             "default": 1024
           },
           "tile": {
             "type": "boolean",
             "title": "Tile",
+            "description": "是否以重疊分塊執行擴散，降低大圖的峰值 GPU 記憶體；只有長邊大於 tile_size 時才啟用。建議搭配 max_resolution=0 以保留原解析度。",
             "default": false
           },
           "tile_size": {
@@ -921,6 +953,7 @@
             "maximum": 2048.0,
             "minimum": 512.0,
             "title": "Tile Size",
+            "description": "正方形分塊的邊長（像素）；較小可節省記憶體，但會增加分塊數與處理時間。",
             "default": 1024
           },
           "tile_overlap": {
@@ -928,6 +961,7 @@
             "maximum": 512.0,
             "minimum": 0.0,
             "title": "Tile Overlap",
+            "description": "相鄰分塊的重疊寬度（像素），用於羽化接合並降低接縫；較大會增加重複運算。",
             "default": 128
           }
         },
@@ -942,11 +976,13 @@
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
-            "title": "File"
+            "title": "File",
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           },
           "keep_standard": {
             "type": "boolean",
             "title": "Keep Standard",
+            "description": "true（預設）會移除 AI/C2PA 資訊，同時盡量保留非 AI 的一般欄位，例如 Author、Title、Description、Copyright、Comment、Software、Source 與 Creation Time；false 不保留這些白名單文字欄位，採較積極的清理。上游會依格式採不同的無損策略，因此 false 不保證清空所有 metadata：JPEG 可能保留已清除 AI 標記的正常 EXIF，HEIF/AVIF 也會保留非 AI 的容器資料。",
             "default": true
           }
         },
@@ -961,7 +997,8 @@
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
-            "title": "File"
+            "title": "File",
+            "description": "要處理的圖片檔。支援 PNG、JPEG、WebP、HEIC、HEIF、AVIF；預設上限為 25 MB 與 50 MP，實際限制以 /api/v1/capabilities 為準。"
           },
           "sensitivity": {
             "type": "string",
@@ -971,6 +1008,7 @@
               "assume_ai"
             ],
             "title": "Sensitivity",
+            "description": "可見標記偵測策略：auto 只在 metadata 或同產品標記提供佐證時放寬門檻；strict 永不放寬，誤判風險最低；assume_ai 對所有已知標記放寬門檻，適合已知為 AI 圖片但較可能誤判。",
             "default": "auto"
           },
           "backend": {
@@ -981,11 +1019,13 @@
               "lama"
             ],
             "title": "Backend",
+            "description": "指定修補後端：cv2 是快速的傳統 OpenCV 修補；migan 與 lama 是較耗資源的神經網路修補，通常適合較大或較複雜區域。",
             "default": "cv2"
           },
           "strip_metadata": {
             "type": "boolean",
             "title": "Strip Metadata",
+            "description": "是否在產生結果後移除可辨識的 AI provenance metadata（包含 C2PA 與 AI 相關 EXIF/XMP/IPTC）。這不是保證清空所有一般 metadata。",
             "default": true
           }
         },
@@ -999,54 +1039,69 @@
         "properties": {
           "app_version": {
             "type": "string",
-            "title": "App Version"
+            "title": "App Version",
+            "description": "目前 API 應用程式版本。"
           },
           "upstream_version": {
             "type": "string",
-            "title": "Upstream Version"
+            "title": "Upstream Version",
+            "description": "固定使用的 remove-ai-watermarks 上游版本。"
+          },
+          "api_key_required": {
+            "type": "boolean",
+            "title": "Api Key Required",
+            "description": "目前部署是否強制要求 X-API-Key；false 表示未帶金鑰時會使用匿名身分。"
           },
           "supported_formats": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Supported Formats"
+            "title": "Supported Formats",
+            "description": "伺服器接受的圖片副檔名（不含句點）。"
           },
           "max_upload_mb": {
             "type": "integer",
-            "title": "Max Upload Mb"
+            "title": "Max Upload Mb",
+            "description": "單一上傳檔案的大小上限，單位為 MiB。"
           },
           "max_image_pixels": {
             "type": "integer",
-            "title": "Max Image Pixels"
+            "title": "Max Image Pixels",
+            "description": "圖片解碼後的寬乘高像素上限。"
           },
           "archive_ready": {
             "type": "boolean",
-            "title": "Archive Ready"
+            "title": "Archive Ready",
+            "description": "Archive 儲存與 SQLite 是否可用。"
           },
           "redis_ready": {
             "type": "boolean",
-            "title": "Redis Ready"
+            "title": "Redis Ready",
+            "description": "Redis GPU queue 是否可連線；false 時 GPU 工作端點回傳 503。"
           },
           "visible_backends": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Visible Backends"
+            "title": "Visible Backends",
+            "description": "可在可見移除與區域修補選用的 backend 名稱。"
           },
           "gpu_pipelines": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Gpu Pipelines"
+            "title": "Gpu Pipelines",
+            "description": "GPU 不可見浮水印重生成可選用的 pipeline 名稱。"
           }
         },
         "type": "object",
         "required": [
           "app_version",
           "upstream_version",
+          "api_key_required",
           "supported_formats",
           "max_upload_mb",
           "max_image_pixels",
@@ -1061,18 +1116,22 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "title": "Code",
+            "description": "穩定、可供程式判斷的錯誤碼。"
           },
           "message": {
             "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "description": "適合顯示或記錄的錯誤摘要。"
           },
           "details": {
-            "title": "Details"
+            "title": "Details",
+            "description": "選填的結構化驗證或診斷資訊；不包含 API Key 等秘密。"
           },
           "request_id": {
             "type": "string",
-            "title": "Request Id"
+            "title": "Request Id",
+            "description": "本次 HTTP 請求的追蹤 ID，亦會出現在 X-Request-ID 回應標頭。"
           }
         },
         "type": "object",
@@ -1086,7 +1145,8 @@
       "ErrorResponse": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorBody"
+            "$ref": "#/components/schemas/ErrorBody",
+            "description": "統一錯誤內容。"
           }
         },
         "type": "object",
@@ -1099,16 +1159,19 @@
         "properties": {
           "request_id": {
             "type": "string",
-            "title": "Request Id"
+            "title": "Request Id",
+            "description": "本次 HTTP 請求的追蹤 ID。"
           },
           "archive_id": {
             "type": "string",
-            "title": "Archive Id"
+            "title": "Archive Id",
+            "description": "處理紀錄 ID；目前與 request_id 相同。"
           },
           "report": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Report"
+            "title": "Report",
+            "description": "上游辨識報告，包含格式、尺寸、AI provenance、可見及不可見浮水印訊號。"
           }
         },
         "type": "object",
@@ -1123,25 +1186,30 @@
         "properties": {
           "job_id": {
             "type": "string",
-            "title": "Job Id"
+            "title": "Job Id",
+            "description": "GPU 非同步工作的唯一 ID。"
           },
           "archive_id": {
             "type": "string",
-            "title": "Archive Id"
+            "title": "Archive Id",
+            "description": "此工作的處理紀錄 ID。"
           },
           "status": {
             "type": "string",
             "const": "queued",
             "title": "Status",
+            "description": "接受工作時固定為 queued。",
             "default": "queued"
           },
           "status_url": {
             "type": "string",
-            "title": "Status Url"
+            "title": "Status Url",
+            "description": "輪詢工作狀態與進度的 URL；預設需相同客戶的 API Key，無 Key 模式則不帶金鑰。"
           },
           "result_url": {
             "type": "string",
-            "title": "Result Url"
+            "title": "Result Url",
+            "description": "結果下載 URL；工作成功前呼叫會回傳 409。"
           }
         },
         "type": "object",
@@ -1157,15 +1225,18 @@
         "properties": {
           "job_id": {
             "type": "string",
-            "title": "Job Id"
+            "title": "Job Id",
+            "description": "GPU 非同步工作的唯一 ID。"
           },
           "archive_id": {
             "type": "string",
-            "title": "Archive Id"
+            "title": "Archive Id",
+            "description": "此工作的處理紀錄 ID。"
           },
           "task_name": {
             "type": "string",
-            "title": "Task Name"
+            "title": "Task Name",
+            "description": "工作流程名稱，目前為 invisible 或 all。"
           },
           "status": {
             "type": "string",
@@ -1175,13 +1246,15 @@
               "succeeded",
               "failed"
             ],
-            "title": "Status"
+            "title": "Status",
+            "description": "目前工作狀態。"
           },
           "progress": {
             "type": "integer",
             "maximum": 100.0,
             "minimum": 0.0,
-            "title": "Progress"
+            "title": "Progress",
+            "description": "伺服器估算的完成百分比；不是精確剩餘時間。"
           },
           "message": {
             "anyOf": [
@@ -1192,7 +1265,8 @@
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "Message",
+            "description": "目前階段或完成訊息；沒有訊息時為 null。"
           },
           "error": {
             "anyOf": [
@@ -1204,15 +1278,18 @@
                 "type": "null"
               }
             ],
-            "title": "Error"
+            "title": "Error",
+            "description": "失敗時的錯誤碼與訊息；其他狀態為 null。"
           },
           "created_at": {
             "type": "string",
-            "title": "Created At"
+            "title": "Created At",
+            "description": "工作建立時間，UTC ISO 8601 字串。"
           },
           "updated_at": {
             "type": "string",
-            "title": "Updated At"
+            "title": "Updated At",
+            "description": "工作最後更新時間，UTC ISO 8601 字串。"
           },
           "result_url": {
             "anyOf": [
@@ -1223,7 +1300,8 @@
                 "type": "null"
               }
             ],
-            "title": "Result Url"
+            "title": "Result Url",
+            "description": "成功後的下載 URL；尚未成功時為 null。"
           }
         },
         "type": "object",
@@ -1242,11 +1320,13 @@
         "properties": {
           "customer_id": {
             "type": "string",
-            "title": "Customer Id"
+            "title": "Customer Id",
+            "description": "目前認證或匿名身分對應客戶的內部 ID。"
           },
           "customer_name": {
             "type": "string",
-            "title": "Customer Name"
+            "title": "Customer Name",
+            "description": "目前客戶或匿名身分的顯示名稱。"
           },
           "external_id": {
             "anyOf": [
@@ -1257,15 +1337,32 @@
                 "type": "null"
               }
             ],
-            "title": "External Id"
+            "title": "External Id",
+            "description": "部署者設定的外部客戶編號；未設定時為 null。"
           },
           "key_id": {
-            "type": "string",
-            "title": "Key Id"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id",
+            "description": "本次認證所用金鑰的內部 ID；停用 API Key 驗證並以匿名身分呼叫時為 null。"
           },
           "key_prefix": {
-            "type": "string",
-            "title": "Key Prefix"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Prefix",
+            "description": "金鑰的非秘密前綴；停用 API Key 驗證並以匿名身分呼叫時為 null。"
           }
         },
         "type": "object",
@@ -1280,8 +1377,9 @@
       }
     },
     "securitySchemes": {
-      "APIKeyHeader": {
+      "X-API-Key": {
         "type": "apiKey",
+        "description": "輸入 raiw_ 開頭的完整客戶 API Key；不要加上 X-API-Key: 或 Bearer 前綴。",
         "in": "header",
         "name": "X-API-Key"
       }

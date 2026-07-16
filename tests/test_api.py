@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from raiw_api.errors import NoVisibleMarkError
+from raiw_api.security import ANONYMOUS_CUSTOMER_ID, issue_api_key
 
 
 def auth(key: str) -> dict[str, str]:
@@ -25,6 +26,57 @@ def test_health_and_authentication(client):
     assert allowed.json()["customer_id"] == customer["id"]
     assert allowed.json()["key_id"] == record["id"]
     assert allowed.headers["X-Request-ID"]
+
+
+def test_api_key_can_be_disabled_without_losing_attribution(anonymous_client, png_bytes, monkeypatch):
+    http, archive_root = anonymous_client
+    capabilities = http.get("/api/v1/capabilities")
+    assert capabilities.status_code == 200
+    assert capabilities.json()["api_key_required"] is False
+
+    me = http.get("/api/v1/me")
+    assert me.status_code == 200
+    assert me.json() == {
+        "customer_id": ANONYMOUS_CUSTOMER_ID,
+        "customer_name": "Anonymous API Client",
+        "external_id": "anonymous",
+        "key_id": None,
+        "key_prefix": None,
+    }
+
+    def copy_metadata(source: Path, output: Path, *, keep_standard: bool) -> None:
+        shutil.copyfile(source, output)
+
+    monkeypatch.setattr("raiw_api.main.remove_metadata_image", copy_metadata)
+    processed = http.post("/api/v1/remove/metadata", files=upload(png_bytes))
+    assert processed.status_code == 200
+
+    from raiw_api.main import app
+
+    archive_row = app.state.db.get_archive(processed.headers["X-Archive-ID"])
+    assert archive_row is not None
+    assert archive_row["customer_id"] == ANONYMOUS_CUSTOMER_ID
+    assert archive_row["key_id"] is None
+    assert (archive_root / archive_row["output_path"]).exists()
+    access_row = app.state.db.list_access_logs()[-1]
+    assert access_row["customer_id"] == ANONYMOUS_CUSTOMER_ID
+    assert access_row["key_id"] is None
+
+
+def test_optional_mode_validates_any_supplied_key(anonymous_client):
+    http, _ = anonymous_client
+    invalid = http.get("/api/v1/me", headers=auth("raiw_000000000000_invalid"))
+    assert invalid.status_code == 401
+    assert invalid.json()["error"]["code"] == "invalid_api_key"
+
+    from raiw_api.main import app
+
+    customer = app.state.db.create_customer("Identified Customer")
+    key, record = issue_api_key(app.state.db, app.state.settings.api_key_pepper, customer["id"])
+    identified = http.get("/api/v1/me", headers=auth(key))
+    assert identified.status_code == 200
+    assert identified.json()["customer_id"] == customer["id"]
+    assert identified.json()["key_id"] == record["id"]
 
 
 def test_identify_archives_original_and_response(client, png_bytes, monkeypatch):

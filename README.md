@@ -2,17 +2,15 @@
 
 [English](README.en.md) | 繁體中文
 
-這是一個以 FastAPI 包裝 [wiltodelta/remove-ai-watermarks](https://github.com/wiltodelta/remove-ai-watermarks) 0.15.3 的自架 REST API。它提供 Swagger、客戶專屬 API Key、永久保存每次上傳與處理結果，以及包含來源 IP 與時間的存取稽核。
+這是一個以 FastAPI 包裝 [wiltodelta/remove-ai-watermarks](https://github.com/wiltodelta/remove-ai-watermarks) 0.15.3 的自架 REST API。它提供 Swagger，以及預設啟用且可設定停用的 API Key 驗證。
 
-> 僅能處理您有權處理的內容，並請遵守所在地對 AI 標示、內容憑證、個資及稽核資料的法律。此專案不以移除付費圖庫或他人著作權浮水印為目的。
+> 僅能處理您有權處理的內容，並請遵守所在地對 AI 標示、內容憑證及個資的法律。此專案不以移除付費圖庫或他人著作權浮水印為目的。
 
 ## 功能
 
 - 可見 AI 浮水印移除、指定區域修補、AI metadata 移除與來源辨識。
 - 選用 NVIDIA GPU worker 執行 SynthID 等不可見浮水印重生成流程。
-- 每位客戶可擁有多把可撤銷 API Key；資料庫不保存明文金鑰。
-- 每個請求永久保存獨立原圖、結果、response、manifest 與 SHA-256，不做去重。
-- 永久稽核 customer ID、key ID、client/peer IP、UTC 時間、User-Agent、路由、狀態與耗時。
+- 預設強制 API Key；每位客戶可有多把可撤銷金鑰，亦可明確切換為無 Key 公開模式。
 - Swagger `/docs`、ReDoc `/redoc`、[中文 API 文件](docs/API.zh-TW.md)、[英文 API 文件](docs/API.en.md) 與 Postman collection。
 - React 雙語圖片工作台，涵蓋識別、可見移除、畫框修補、metadata 與 GPU 工作追蹤。
 
@@ -50,6 +48,28 @@ curl -X POST http://localhost:8000/api/v1/remove/visible \
   --output processed.png
 ```
 
+### 不要求 API Key（選用）
+
+若服務已由其他身分驗證、私有網路或閘道保護，可在 `.env` 設定以下值後重建／重啟：
+
+```bash
+sed -i 's/^REQUIRE_API_KEY=.*/REQUIRE_API_KEY=false/' .env
+docker compose up -d --build
+```
+
+此模式下前端會自動開啟工作台，API 呼叫可省略 `X-API-Key`，`GET /api/v1/me` 的 `key_id` 與 `key_prefix` 為 `null`。未帶 Key 的請求會歸入固定匿名客戶；若請求有帶 Key，仍會驗證並歸戶，無效 Key 仍回傳 401。此設定會取消客戶間的 API 授權隔離，不建議直接暴露於公網；至少應搭配防火牆、反向代理驗證與速率限制。改回 `REQUIRE_API_KEY=true` 即恢復預設行為。
+
+### Metadata 的 `keep_standard`
+
+`POST /api/v1/remove/metadata` 的 `keep_standard` 決定清除 AI/C2PA 資訊時，是否保留非 AI 的一般 metadata：
+
+| 值 | 行為 |
+|---|---|
+| `true`（預設） | 移除可辨識的 AI/C2PA 資訊，並盡量保留 Author、Title、Description、Copyright、Comment、Software、Source、Creation Time 等一般欄位。若欄位值本身可辨識出 AI 產生器，仍會移除。 |
+| `false` | 不保留上述白名單文字欄位，採較積極的清理。 |
+
+上游會依圖片格式使用不同的無損處理策略，因此 `false` 不代表保證清空所有 metadata；JPEG 可能保留已清除 AI 標記的正常 EXIF，HEIF／AVIF 也會保留非 AI 的容器資料。完整欄位說明見 [API 文件](docs/API.zh-TW.md)。
+
 ## GPU profile
 
 Linux 主機必須先安裝 NVIDIA driver、Docker Engine 與 NVIDIA Container Toolkit。首次執行會下載數 GB 模型。
@@ -60,40 +80,12 @@ docker compose --profile gpu up -d --build
 
 不可見浮水印與完整流程使用非同步 job API；依序呼叫 `POST /api/v1/jobs/invisible` 或 `/all`、輪詢 `GET /api/v1/jobs/{id}`，最後下載 `/result`。詳細參數見 [API 文件](docs/API.zh-TW.md)。
 
-## 永久保存與稽核
-
-預設將主機 `./archive-data` 掛載為容器 `/data/archive`：
-
-```text
-archive-data/YYYY/MM/DD/{request_id}/
-  original.{ext}
-  processed.{ext}
-  response.json
-  manifest.json
-```
-
-SQLite 位於 `archive-data/raiw-api.sqlite3`。即使圖片相同，每次請求仍各存一份。資料不會自動清除，因此部署者必須負責容量監控、備份、存取權限、隱私告知與刪除請求。`archive-data/` 已被 Git 忽略，請勿把客戶圖片或資料庫提交到 GitHub。
-
-```bash
-# 客戶與金鑰
-docker compose exec api raiw-api-admin customer list
-docker compose exec api raiw-api-admin key list --customer-id CUSTOMER_ID
-docker compose exec api raiw-api-admin key revoke KEY_ID
-
-# 匯出與驗證
-docker compose exec api raiw-api-admin archive export --format csv --output /data/archive/archive.csv
-docker compose exec api raiw-api-admin audit export --format json --output /data/archive/audit.json
-docker compose exec api raiw-api-admin archive verify
-
-# 明確永久刪除單筆資料
-docker compose exec api raiw-api-admin archive delete REQUEST_ID --yes
-```
-
 ## 設定
 
 | 環境變數 | 預設值 | 說明 |
 |---|---:|---|
 | `API_KEY_PEPPER` | 僅開發用字串 | 正式環境必須改成長隨機秘密；更換後舊 key 全部失效 |
+| `REQUIRE_API_KEY` | `true` | 是否強制要求 `X-API-Key`；`false` 時未帶 Key 的請求歸入固定匿名客戶 |
 | `ARCHIVE_HOST_PATH` | `./archive-data` | Compose 掛載的主機資料夾 |
 | `ARCHIVE_ROOT` | `/data/archive` | 容器內 archive 根目錄 |
 | `MAX_UPLOAD_MB` | `25` | 單檔上限 |

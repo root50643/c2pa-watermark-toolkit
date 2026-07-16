@@ -16,11 +16,23 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     archive = tmp_path / "archive"
     monkeypatch.setenv("ARCHIVE_ROOT", str(archive))
     monkeypatch.setenv("API_KEY_PEPPER", "test-pepper-not-for-production")
+    monkeypatch.setenv("REQUIRE_API_KEY", "true")
     monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
     with TestClient(app, client=("127.0.0.1", 50000)) as test_client:
         customer = app.state.db.create_customer("Test Customer", "customer-001", "test@example.invalid")
         key, record = issue_api_key(app.state.db, app.state.settings.api_key_pepper, customer["id"])
         yield test_client, key, customer, record, archive
+
+
+@pytest.fixture
+def anonymous_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    archive = tmp_path / "anonymous-archive"
+    monkeypatch.setenv("ARCHIVE_ROOT", str(archive))
+    monkeypatch.setenv("API_KEY_PEPPER", "test-pepper-not-for-production")
+    monkeypatch.setenv("REQUIRE_API_KEY", "false")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
+    with TestClient(app, client=("127.0.0.1", 50000)) as test_client:
+        yield test_client, archive
 
 
 @pytest.fixture

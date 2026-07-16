@@ -23,9 +23,12 @@ vi.mock("./api", async (original) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
+  localStorage.clear();
   api.getCapabilities.mockResolvedValue({
     app_version: "0.1.0",
     upstream_version: "0.15.3",
+    api_key_required: true,
     supported_formats: ["png", "jpeg", "webp", "heic", "heif", "avif"],
     max_upload_mb: 25,
     max_image_pixels: 50_000_000,
@@ -95,6 +98,34 @@ describe("workbench", () => {
     expect(sessionStorage.getItem(API_KEY_SESSION_KEY)).toBe(key);
     expect(localStorage.getItem(API_KEY_SESSION_KEY)).toBeNull();
     expect(window.location.href).not.toContain(key);
+  });
+
+  it("opens the workbench without asking for a key when authentication is disabled", async () => {
+    api.getCapabilities.mockResolvedValueOnce({
+      app_version: "0.1.0",
+      upstream_version: "0.15.3",
+      api_key_required: false,
+      supported_formats: ["png", "jpeg", "webp", "heic", "heif", "avif"],
+      max_upload_mb: 25,
+      max_image_pixels: 50_000_000,
+      archive_ready: true,
+      redis_ready: false,
+      visible_backends: ["cv2", "migan", "lama"],
+      gpu_pipelines: ["controlnet", "sdxl", "qwen"]
+    });
+    api.authenticate.mockResolvedValueOnce({
+      customer_id: "00000000-0000-0000-0000-000000000000",
+      customer_name: "Anonymous API Client",
+      external_id: "anonymous",
+      key_id: null,
+      key_prefix: null
+    });
+    render(<App />);
+    await screen.findByText("匿名 API 使用者");
+    expect(api.authenticate).toHaveBeenCalledWith("");
+    expect(screen.queryByLabelText("API Key")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "移除 Metadata" })).toBeInTheDocument();
+    expect(sessionStorage.getItem(API_KEY_SESSION_KEY)).toBeNull();
   });
 
   it("does not render client-facing data policy messages", async () => {

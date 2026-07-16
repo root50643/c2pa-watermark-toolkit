@@ -10,7 +10,7 @@
 docker compose up -d --build
 ```
 
-接著開啟 <http://localhost:8080>。使用管理 CLI 核發的客戶 API Key 連接工作台；驗證成功後畫面會顯示客戶名稱與 key prefix。金鑰只放在瀏覽器 `sessionStorage`，按下「中斷連接」或結束工作階段即可清除。
+接著開啟 <http://localhost:8080>。預設使用管理 CLI 核發的客戶 API Key 連接工作台；驗證成功後畫面會顯示客戶名稱與 key prefix。金鑰只放在瀏覽器 `sessionStorage`，按下「中斷連接」或結束工作階段即可清除。若部署者設定 `REQUIRE_API_KEY=false`，前端會依 capabilities 自動以匿名身分開啟工作台，不顯示 API Key 輸入欄位。
 
 首頁系統狀態會顯示 API、Archive 與 GPU queue 是否可用，以及 API／上游版本、格式與單檔限制。右上角可在繁體中文與英文之間切換。
 
@@ -21,7 +21,7 @@ docker compose up -d --build
 3. 設定該流程的參數並按「開始處理」。
 4. 同步流程完成後可比較處理前後圖片並下載，畫面同時顯示 request ID 與 archive ID。
 
-圖片識別以 JSON 報告呈現來源與已知訊號。可見標記可設定敏感度、後端及是否一併清除 Metadata。Metadata 流程可選擇是否保留標準 EXIF 欄位。
+圖片識別以 JSON 報告呈現來源與已知訊號。可見標記可設定敏感度、後端及是否一併清除 Metadata。Metadata 流程的「保留非 AI 的一般 Metadata」預設開啟：開啟時保留 Author、Title、Copyright 等非 AI 欄位；關閉時採較積極的清理，但受圖片格式與上游無損策略影響，不保證清空所有 metadata。
 
 ## 區域修補
 

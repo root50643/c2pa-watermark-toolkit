@@ -50,6 +50,7 @@ select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["S101", "S105", "S106", "S108"]
 "src/raiw_api/main.py" = ["RUF001", "S104"]
+"src/raiw_api/schemas.py" = ["RUF001"]
 
 [tool.pyright]
 pythonVersion = "3.10"

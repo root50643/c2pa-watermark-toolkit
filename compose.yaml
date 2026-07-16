@@ -9,6 +9,7 @@ services:
       - "${API_PORT:-8000}:8000"
     environment:
       API_KEY_PEPPER: "${API_KEY_PEPPER:-development-only-change-me}"
+      REQUIRE_API_KEY: "${REQUIRE_API_KEY:-true}"
       ARCHIVE_ROOT: /data/archive
       MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-25}"
       MAX_IMAGE_PIXELS: "${MAX_IMAGE_PIXELS:-50000000}"

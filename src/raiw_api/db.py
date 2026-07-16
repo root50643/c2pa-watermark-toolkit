@@ -159,6 +159,23 @@ class Database:
             )
         return self.get_customer(customer_id) or {}
 
+    def ensure_customer(
+        self,
+        customer_id: str,
+        name: str,
+        external_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a stable system customer if it does not already exist."""
+        now = utc_now()
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO customers(
+                       id,name,external_id,contact,active,created_at,updated_at
+                   ) VALUES(?,?,?,NULL,1,?,?)""",
+                (customer_id, name, external_id, now, now),
+            )
+        return self.get_customer(customer_id) or {}
+
     def get_customer(self, customer_id: str) -> dict[str, Any] | None:
         return self._one("SELECT * FROM customers WHERE id=?", (customer_id,))
 

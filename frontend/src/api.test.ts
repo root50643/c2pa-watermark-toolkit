@@ -26,6 +26,23 @@ describe("API client", () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it("omits the authentication header in anonymous mode", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          customer_id: "00000000-0000-0000-0000-000000000000",
+          customer_name: "Anonymous API Client",
+          external_id: "anonymous",
+          key_id: null,
+          key_prefix: null
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    await authenticate("");
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/v1/me", { headers: {} }]);
+  });
+
   it("builds multipart requests without overriding the content type", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ request_id: "r", archive_id: "a", report: {} }), {

@@ -23,8 +23,8 @@ export class ApiError extends Error {
   }
 }
 
-function authHeaders(apiKey: string): HeadersInit {
-  return { "X-API-Key": apiKey };
+function authHeaders(apiKey?: string | null): HeadersInit {
+  return apiKey ? { "X-API-Key": apiKey } : {};
 }
 
 async function errorFromResponse(response: Response): Promise<ApiError> {
@@ -59,7 +59,7 @@ export function getReady() {
   return jsonRequest<{ status: string; archive: boolean; database: boolean }>("/readyz");
 }
 
-export function authenticate(apiKey: string) {
+export function authenticate(apiKey?: string | null) {
   return jsonRequest<Customer>("/api/v1/me", { headers: authHeaders(apiKey) });
 }
 
@@ -72,7 +72,7 @@ function createForm(file: File, fields: Record<string, string | number | boolean
   return form;
 }
 
-export async function identify(file: File, apiKey: string): Promise<IdentifyResult> {
+export async function identify(file: File, apiKey?: string | null): Promise<IdentifyResult> {
   return jsonRequest<IdentifyResult>("/api/v1/identify", {
     method: "POST",
     headers: authHeaders(apiKey),
@@ -90,7 +90,7 @@ function responseFilename(response: Response) {
 export async function processBinary(
   path: "/api/v1/remove/visible" | "/api/v1/remove/erase" | "/api/v1/remove/metadata",
   file: File,
-  apiKey: string,
+  apiKey: string | null | undefined,
   fields: Record<string, string | number | boolean | null | undefined>
 ): Promise<BinaryResult> {
   const response = await fetch(path, {
@@ -111,7 +111,7 @@ export async function processBinary(
 export async function submitGpuJob(
   task: "invisible" | "all",
   file: File,
-  apiKey: string,
+  apiKey: string | null | undefined,
   fields: Record<string, string | number | boolean | null | undefined>
 ) {
   return jsonRequest<JobAccepted>(`/api/v1/jobs/${task}`, {
@@ -121,13 +121,13 @@ export async function submitGpuJob(
   });
 }
 
-export function getJob(jobId: string, apiKey: string) {
+export function getJob(jobId: string, apiKey?: string | null) {
   return jsonRequest<JobStatus>(`/api/v1/jobs/${encodeURIComponent(jobId)}`, {
     headers: authHeaders(apiKey)
   });
 }
 
-export async function downloadJobResult(jobId: string, apiKey: string): Promise<BinaryResult> {
+export async function downloadJobResult(jobId: string, apiKey?: string | null): Promise<BinaryResult> {
   const response = await fetch(`/api/v1/jobs/${encodeURIComponent(jobId)}/result`, {
     headers: authHeaders(apiKey)
   });

@@ -9,10 +9,20 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def _bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean setting: {value!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     archive_root: Path
     api_key_pepper: str
+    require_api_key: bool
     max_upload_bytes: int
     max_image_pixels: int
     trusted_proxy_cidrs: tuple[str, ...]
@@ -33,6 +43,7 @@ def get_settings() -> Settings:
     return Settings(
         archive_root=root,
         api_key_pepper=os.getenv("API_KEY_PEPPER", "development-only-change-me"),
+        require_api_key=_bool(os.getenv("REQUIRE_API_KEY", "true")),
         max_upload_bytes=int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024,
         max_image_pixels=int(os.getenv("MAX_IMAGE_PIXELS", "50000000")),
         trusted_proxy_cidrs=_csv(os.getenv("TRUSTED_PROXY_CIDRS", "")),
