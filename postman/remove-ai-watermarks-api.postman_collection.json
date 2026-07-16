@@ -1,0 +1,100 @@
+{
+  "info": {
+    "_postman_id": "7d52f83a-df0c-4aa9-b604-8a1c6aee0c31",
+    "name": "C2PA Watermark Toolkit API",
+    "description": "Set base_url and api_key. Accepted images and access metadata are retained permanently.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {"key": "key", "value": "X-API-Key", "type": "string"},
+      {"key": "value", "value": "{{api_key}}", "type": "string"},
+      {"key": "in", "value": "header", "type": "string"}
+    ]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000"},
+    {"key": "api_key", "value": "raiw_REPLACE_ME"},
+    {"key": "job_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {"name": "Health", "request": {"auth": {"type": "noauth"}, "method": "GET", "url": "{{base_url}}/healthz"}},
+        {"name": "Capabilities", "request": {"auth": {"type": "noauth"}, "method": "GET", "url": "{{base_url}}/api/v1/capabilities"}},
+        {"name": "Current customer", "request": {"method": "GET", "url": "{{base_url}}/api/v1/me"}}
+      ]
+    },
+    {
+      "name": "CPU image operations",
+      "item": [
+        {
+          "name": "Identify",
+          "request": {
+            "method": "POST",
+            "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": ""}]},
+            "url": "{{base_url}}/api/v1/identify"
+          }
+        },
+        {
+          "name": "Remove visible watermark",
+          "request": {
+            "method": "POST",
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": ""},
+              {"key": "sensitivity", "value": "auto", "type": "text"},
+              {"key": "backend", "value": "cv2", "type": "text"},
+              {"key": "strip_metadata", "value": "true", "type": "text"}
+            ]},
+            "url": "{{base_url}}/api/v1/remove/visible"
+          }
+        },
+        {
+          "name": "Erase regions",
+          "request": {
+            "method": "POST",
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": ""},
+              {"key": "regions", "value": "[[10,20,100,50]]", "type": "text"},
+              {"key": "backend", "value": "cv2", "type": "text"}
+            ]},
+            "url": "{{base_url}}/api/v1/remove/erase"
+          }
+        },
+        {
+          "name": "Remove metadata",
+          "request": {
+            "method": "POST",
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": ""},
+              {"key": "keep_standard", "value": "true", "type": "text"}
+            ]},
+            "url": "{{base_url}}/api/v1/remove/metadata"
+          }
+        }
+      ]
+    },
+    {
+      "name": "GPU jobs",
+      "item": [
+        {
+          "name": "Submit invisible job",
+          "request": {
+            "method": "POST",
+            "body": {"mode": "formdata", "formdata": [
+              {"key": "file", "type": "file", "src": ""},
+              {"key": "pipeline", "value": "controlnet", "type": "text"},
+              {"key": "force", "value": "false", "type": "text"}
+            ]},
+            "url": "{{base_url}}/api/v1/jobs/invisible"
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 202) pm.collectionVariables.set('job_id', pm.response.json().job_id);"]}}]
+        },
+        {"name": "Get job", "request": {"method": "GET", "url": "{{base_url}}/api/v1/jobs/{{job_id}}"}},
+        {"name": "Download result", "request": {"method": "GET", "url": "{{base_url}}/api/v1/jobs/{{job_id}}/result"}}
+      ]
+    }
+  ]
+}

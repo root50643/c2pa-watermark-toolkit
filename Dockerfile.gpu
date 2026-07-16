@@ -1,0 +1,18 @@
+FROM pytorch/pytorch:2.13.0-cuda12.6-cudnn9-runtime@sha256:6acf597eeb8e376a96580dde4952f37cc017fef732bb40bfc73f28f25e3f64b4
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m pip install --upgrade pip && python -m pip install ".[gpu]"
+
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /data/archive /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /data /app /home/appuser
+USER appuser
+
+CMD ["celery", "-A", "raiw_api.tasks:celery_app", "worker", "--loglevel=INFO", "--concurrency=1", "--pool=solo"]

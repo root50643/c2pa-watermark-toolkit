@@ -1,0 +1,96 @@
+name: remove-ai-watermarks-api
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      API_KEY_PEPPER: "${API_KEY_PEPPER:-development-only-change-me}"
+      ARCHIVE_ROOT: /data/archive
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-25}"
+      MAX_IMAGE_PIXELS: "${MAX_IMAGE_PIXELS:-50000000}"
+      TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-172.30.10.10/32}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+      GIT_COMMIT: "${GIT_COMMIT:-development}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    volumes:
+      - "${ARCHIVE_HOST_PATH:-./archive-data}:/data/archive"
+    networks:
+      default:
+      proxy:
+        ipv4_address: "${API_PROXY_IP:-172.30.10.20}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    networks:
+      proxy:
+        ipv4_address: "${FRONTEND_PROXY_IP:-172.30.10.10}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/frontend-healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["gpu"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  gpu-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    profiles: ["gpu"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      API_KEY_PEPPER: "${API_KEY_PEPPER:-development-only-change-me}"
+      ARCHIVE_ROOT: /data/archive
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+      GPU_DEVICE: "${GPU_DEVICE:-cuda}"
+      GPU_MODEL_ID: "${GPU_MODEL_ID:-}"
+      GIT_COMMIT: "${GIT_COMMIT:-development}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    volumes:
+      - "${ARCHIVE_HOST_PATH:-./archive-data}:/data/archive"
+      - hf-cache:/home/appuser/.cache/huggingface
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  hf-cache:
+
+networks:
+  default:
+  proxy:
+    ipam:
+      config:
+        - subnet: "${PROXY_SUBNET:-172.30.10.0/24}"

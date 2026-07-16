@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remove-ai-watermarks-api"
+version = "0.1.0"
+description = "Audited REST API for remove-ai-watermarks"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "C2PA Watermark Toolkit contributors"}]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "python-multipart>=0.0.20,<1",
+  "celery[redis]>=5.4,<6",
+  "remove-ai-watermarks[lama,migan]==0.15.3",
+]
+
+[project.optional-dependencies]
+gpu = ["remove-ai-watermarks[gpu,detect,trustmark,esrgan]==0.15.3"]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "pyright>=1.1.400,<2",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+raiw-api = "raiw_api.main:run"
+raiw-api-admin = "raiw_api.admin_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/raiw_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --tb=short"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["S101", "S105", "S106", "S108"]
+"src/raiw_api/main.py" = ["RUF001", "S104"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+include = ["src"]
