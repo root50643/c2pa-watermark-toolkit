@@ -23,7 +23,7 @@ gpu = ["remove-ai-watermarks[gpu,detect,trustmark,esrgan]==0.15.3"]
 dev = [
   "httpx>=0.28,<1",
   "pytest>=8.3,<9",
-  "pytest-cov>=6,<7",
+  "pytest-cov>=6,<8",
   "pyright>=1.1.400,<2",
   "ruff>=0.11,<1",
 ]
