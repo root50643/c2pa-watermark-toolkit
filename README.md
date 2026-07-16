@@ -16,15 +16,20 @@
 - Swagger `/docs`、ReDoc `/redoc`、[中文 API 文件](docs/API.zh-TW.md)、[英文 API 文件](docs/API.en.md) 與 Postman collection。
 - React 雙語圖片工作台，涵蓋識別、可見移除、畫框修補、metadata 與 GPU 工作追蹤。
 
-## 快速啟動（CPU）
+## 快速啟動（Linux／CPU）
 
-```powershell
-Copy-Item .env.example .env
-# 先把 .env 的 API_KEY_PEPPER 換成足夠長的隨機值
+以下指令以 Linux 的 Bash 為準。主機需先安裝 Git、OpenSSL、Docker Engine 與 Docker Compose v2 plugin，並確認目前使用者可以執行 `docker`。
+
+```bash
+install -m 600 .env.example .env
+pepper="$(openssl rand -hex 32)"
+sed -i "s|^API_KEY_PEPPER=.*|API_KEY_PEPPER=${pepper}|" .env
+unset pepper
+
 docker compose up -d --build
 
 # 建立客戶並核發第一把金鑰；明文只會顯示這一次
-docker compose exec api raiw-api-admin customer create `
+docker compose exec api raiw-api-admin customer create \
   --name "Local developer" --external-id "local-001" --issue-key
 ```
 
@@ -33,6 +38,8 @@ docker compose exec api raiw-api-admin customer create `
 Swagger 可由 <http://localhost:8080/docs> 或 <http://localhost:8000/docs> 開啟；健康檢查為 <http://localhost:8080/healthz>。
 
 ```bash
+export RAIW_API_KEY='raiw_REPLACE_ME'
+
 curl -X POST http://localhost:8000/api/v1/identify \
   -H "X-API-Key: $RAIW_API_KEY" \
   -F "file=@image.png"
@@ -45,7 +52,7 @@ curl -X POST http://localhost:8000/api/v1/remove/visible \
 
 ## GPU profile
 
-主機必須先安裝 NVIDIA driver、Docker Desktop／Engine 與 NVIDIA Container Toolkit。首次執行會下載數 GB 模型。
+Linux 主機必須先安裝 NVIDIA driver、Docker Engine 與 NVIDIA Container Toolkit。首次執行會下載數 GB 模型。
 
 ```bash
 docker compose --profile gpu up -d --build
@@ -105,7 +112,11 @@ docker compose exec api raiw-api-admin archive delete REQUEST_ID --yes
 
 ## 開發與測試
 
+以下流程以 Linux Bash、Python 3 與 Node.js 22 為準：
+
 ```bash
+python3 -m venv .bootstrap-venv
+. .bootstrap-venv/bin/activate
 python -m pip install uv==0.8.2
 uv sync --frozen --extra dev
 uv run ruff check .
@@ -115,6 +126,7 @@ uv run python scripts/export_openapi.py --check
 docker build -t remove-ai-watermarks-api:local .
 
 cd frontend
+corepack enable
 pnpm install --frozen-lockfile
 pnpm generate:api
 pnpm lint

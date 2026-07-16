@@ -14,6 +14,13 @@
 
 除 `/healthz`、`/readyz`、`/api/v1/capabilities` 與文件外皆須認證。每個回應包含 `X-Request-ID`。通過基本圖片驗證後，原圖與客戶稽核會永久保存。
 
+本文件的命令列範例以 Linux Bash 為準。先在 shell 設定以下變數：
+
+```bash
+export BASE_URL='http://localhost:8000'
+export RAIW_API_KEY='raiw_REPLACE_ME'
+```
+
 ## 端點
 
 ### `GET /healthz`、`GET /readyz`
@@ -82,11 +89,15 @@ GPU profile 未啟動時回傳 `503 gpu_worker_unavailable`，但已驗證的上
 `all` 另接受 `sensitivity` 與 `backend`。伺服器不接受客戶端提供 HF token、device 或任意 model ID。
 
 ```bash
-JOB=$(curl -s -X POST "$BASE_URL/api/v1/jobs/invisible" \
-  -H "X-API-Key: $RAIW_API_KEY" -F "file=@image.png" -F "force=true")
-curl -H "X-API-Key: $RAIW_API_KEY" "$BASE_URL/api/v1/jobs/JOB_ID"
+JOB_ID="$(
+  curl -fsS -X POST "$BASE_URL/api/v1/jobs/invisible" \
+    -H "X-API-Key: $RAIW_API_KEY" \
+    -F "file=@image.png" -F "force=true" \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["job_id"])'
+)"
+curl -H "X-API-Key: $RAIW_API_KEY" "$BASE_URL/api/v1/jobs/$JOB_ID"
 curl -H "X-API-Key: $RAIW_API_KEY" \
-  "$BASE_URL/api/v1/jobs/JOB_ID/result" --output processed.png
+  "$BASE_URL/api/v1/jobs/$JOB_ID/result" --output processed.png
 ```
 
 Job 狀態為 `queued`、`running`、`succeeded` 或 `failed`。只有建立工作的同一客戶能查詢與下載。

@@ -16,13 +16,18 @@ A self-hosted FastAPI wrapper for [wiltodelta/remove-ai-watermarks](https://gith
 - Swagger `/docs`, ReDoc `/redoc`, [English API reference](docs/API.en.md), [Chinese reference](docs/API.zh-TW.md), and Postman collection.
 - A bilingual React image workbench for identification, visible removal, visual region repair, metadata, and GPU job tracking.
 
-## CPU quick start
+## Linux CPU quick start
 
-```powershell
-Copy-Item .env.example .env
-# Replace API_KEY_PEPPER in .env with a long random secret.
+The commands below target Bash on Linux. Install Git, OpenSSL, Docker Engine, and the Docker Compose v2 plugin first, and ensure the current user can run `docker`.
+
+```bash
+install -m 600 .env.example .env
+pepper="$(openssl rand -hex 32)"
+sed -i "s|^API_KEY_PEPPER=.*|API_KEY_PEPPER=${pepper}|" .env
+unset pepper
+
 docker compose up -d --build
-docker compose exec api raiw-api-admin customer create `
+docker compose exec api raiw-api-admin customer create \
   --name "Local developer" --external-id "local-001" --issue-key
 ```
 
@@ -31,6 +36,8 @@ Open <http://localhost:8080> and enter the one-time `raiw_...` key to use the im
 Swagger is available at <http://localhost:8080/docs> and <http://localhost:8000/docs>.
 
 ```bash
+export RAIW_API_KEY='raiw_REPLACE_ME'
+
 curl -X POST http://localhost:8000/api/v1/identify \
   -H "X-API-Key: $RAIW_API_KEY" -F "file=@image.png"
 
@@ -41,7 +48,7 @@ curl -X POST http://localhost:8000/api/v1/remove/visible \
 
 ## GPU profile
 
-The host needs an NVIDIA driver, Docker, and NVIDIA Container Toolkit. The first inference downloads several gigabytes of models.
+The Linux host needs an NVIDIA driver, Docker Engine, and NVIDIA Container Toolkit. The first inference downloads several gigabytes of models.
 
 ```bash
 docker compose --profile gpu up -d --build
@@ -66,7 +73,11 @@ Configuration variables are documented in [.env.example](.env.example) and the [
 
 ## Development
 
+The following workflow targets Linux Bash with Python 3 and Node.js 22:
+
 ```bash
+python3 -m venv .bootstrap-venv
+. .bootstrap-venv/bin/activate
 python -m pip install uv==0.8.2
 uv sync --frozen --extra dev
 uv run ruff check .
@@ -76,6 +87,7 @@ uv run python scripts/export_openapi.py --check
 docker build -t remove-ai-watermarks-api:local .
 
 cd frontend
+corepack enable
 pnpm install --frozen-lockfile
 pnpm generate:api
 pnpm lint

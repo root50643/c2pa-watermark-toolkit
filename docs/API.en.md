@@ -12,6 +12,13 @@
 
 Authentication is required except for health, readiness, capabilities, and documentation. Every response contains `X-Request-ID`. Once an image passes basic validation, its original bytes and associated audit metadata are retained permanently.
 
+Command-line examples in this document target Bash on Linux. Set these shell variables first:
+
+```bash
+export BASE_URL='http://localhost:8000'
+export RAIW_API_KEY='raiw_REPLACE_ME'
+```
+
 ## Endpoints
 
 - `GET /healthz`: liveness.

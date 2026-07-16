@@ -4,7 +4,13 @@
 
 ## Start and connect
 
-Run `docker compose up -d --build`, then open <http://localhost:8080>. Connect with a customer API key issued by the administration CLI. After validation, the workbench displays the customer name and key prefix. The key is kept in browser `sessionStorage` only and can be removed with Disconnect or by ending the session.
+Command-line instructions in this guide target Bash on Linux. Start the services from the repository root:
+
+```bash
+docker compose up -d --build
+```
+
+Then open <http://localhost:8080>. Connect with a customer API key issued by the administration CLI. After validation, the workbench displays the customer name and key prefix. The key is kept in browser `sessionStorage` only and can be removed with Disconnect or by ending the session.
 
 The status panel reports API, Archive, and GPU queue availability together with versions, supported formats, and file limits. Use the top-right control to switch between Traditional Chinese and English.
 
@@ -31,6 +37,7 @@ Frontend API types are generated from the committed `openapi/openapi.json`:
 
 ```bash
 cd frontend
+corepack enable
 pnpm install --frozen-lockfile
 pnpm generate:api
 pnpm check:api

@@ -4,7 +4,13 @@
 
 ## 啟動與連接
 
-執行 `docker compose up -d --build` 後開啟 <http://localhost:8080>。使用管理 CLI 核發的客戶 API Key 連接工作台；驗證成功後畫面會顯示客戶名稱與 key prefix。金鑰只放在瀏覽器 `sessionStorage`，按下「中斷連接」或結束工作階段即可清除。
+本文件的命令列指令以 Linux Bash 為準。請從專案根目錄啟動服務：
+
+```bash
+docker compose up -d --build
+```
+
+接著開啟 <http://localhost:8080>。使用管理 CLI 核發的客戶 API Key 連接工作台；驗證成功後畫面會顯示客戶名稱與 key prefix。金鑰只放在瀏覽器 `sessionStorage`，按下「中斷連接」或結束工作階段即可清除。
 
 首頁系統狀態會顯示 API、Archive 與 GPU queue 是否可用，以及 API／上游版本、格式與單檔限制。右上角可在繁體中文與英文之間切換。
 
@@ -31,6 +37,7 @@
 
 ```bash
 cd frontend
+corepack enable
 pnpm install --frozen-lockfile
 pnpm generate:api
 pnpm check:api
