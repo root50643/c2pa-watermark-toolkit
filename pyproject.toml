@@ -15,11 +15,11 @@ dependencies = [
   "uvicorn[standard]>=0.34,<1",
   "python-multipart>=0.0.20,<1",
   "celery[redis]>=5.4,<6",
-  "remove-ai-watermarks[lama,migan]==0.15.3",
+  "remove-ai-watermarks[lama,migan]==0.18.0",
 ]
 
 [project.optional-dependencies]
-gpu = ["remove-ai-watermarks[gpu,detect,trustmark,esrgan]==0.15.3"]
+gpu = ["remove-ai-watermarks[gpu,detect,trustmark,esrgan]==0.18.0"]
 dev = [
   "httpx>=0.28,<1",
   "pytest>=8.3,<9",
